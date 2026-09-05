@@ -141,7 +141,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
 
     # ---- endpoints ----
 
-    @app.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
+    @app.get("/health", response_model=HealthResponse)
     async def health(request: Request):
         s = store(request)
         writable, wal_mode, total, unsealed, sealed = await s.health_check()
@@ -162,6 +162,10 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             "rpc": {"network": "base", "reachable": rpc_ok},
             "pads": pads,
         }
+
+    @app.head("/health", include_in_schema=False)
+    async def health_head(request: Request):
+        return await health(request)
 
     @app.post("/v1/pads", status_code=201, response_model=PadCreatedResponse,
               responses=_err(400, 402, 409, 502))
