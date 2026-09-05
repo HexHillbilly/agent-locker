@@ -42,7 +42,15 @@ async def append(client, pad_id, write_key, payload, content_type="application/j
 
 
 def envelope(**kw):
-    e = {"schema": "locker.handoff.v1", "sender": "a", "recipient": "b", "task": "handoff"}
+    e = {
+        "schema": "locker.handoff.v1",
+        "task_id": "task-1",
+        "from_agent": "agent-a",
+        "to_agent": "agent-b",
+        "constraints": ["be concise"],
+        "artifacts": [{"name": "input.txt", "size": 10}],
+        "budget_usd": 0.5,
+    }
     e.update(kw)
     return e
 
@@ -113,9 +121,16 @@ async def test_append_envelope_then_chain(client):
 
 async def test_block_zero_must_be_envelope(client):
     d = await create_pad(client)
-    r = await append(client, d["pad_id"], d["write_key"], {"schema": "something.else"})
+    r = await append(client, d["pad_id"], d["write_key"], envelope(schema="something.else"))
     assert r.status_code == 400
     r = await append(client, d["pad_id"], d["write_key"], b"not json")
+    assert r.status_code == 400
+    for field in ["task_id", "from_agent", "to_agent", "constraints", "artifacts", "budget_usd"]:
+        env = envelope()
+        env.pop(field)
+        r = await append(client, d["pad_id"], d["write_key"], env)
+        assert r.status_code == 400, field
+    r = await append(client, d["pad_id"], d["write_key"], envelope(constraints="not a list"))
     assert r.status_code == 400
 
 
@@ -236,13 +251,30 @@ async def test_blocks_wrong_ticket_for_other_pad(client):
     assert r.status_code == 401
 
 
-async def test_blocks_read_once_exhausts(client):
+async def test_read_once_allows_slicing_within_lease(client):
+    d = await create_pad(client)
+    assert (await append(client, d["pad_id"], d["write_key"], envelope())).status_code == 201
+    assert (await append(client, d["pad_id"], d["write_key"], b"payload-1")).status_code == 201
+    # read block 0 (envelope) first — this opens the lease
+    r = await client.get(f"/v1/pads/{d['pad_id']}/blocks",
+                         params={"ticket": d["read_ticket"], "from": 0, "to": 0})
+    assert r.status_code == 200
+    assert [b["seq"] for b in r.json()["blocks"]] == [0]
+    # reading block 1 with the SAME ticket must still work within the lease
+    r = await client.get(f"/v1/pads/{d['pad_id']}/blocks",
+                         params={"ticket": d["read_ticket"], "from": 1, "to": 1})
+    assert r.status_code == 200
+    assert [b["seq"] for b in r.json()["blocks"]] == [1]
+
+
+async def test_read_once_lease_expires(client, monkeypatch):
     d = await create_pad(client)
     assert (await append(client, d["pad_id"], d["write_key"], envelope())).status_code == 201
     r = await client.get(f"/v1/pads/{d['pad_id']}/blocks", params={"ticket": d["read_ticket"]})
-    assert r.status_code == 200
+    assert r.status_code == 200  # first read opens the lease
+    monkeypatch.setattr("lockerd.db.now", lambda: int(time.time()) + 9999)
     r = await client.get(f"/v1/pads/{d['pad_id']}/blocks", params={"ticket": d["read_ticket"]})
-    assert r.status_code == 403
+    assert r.status_code == 403  # lease expired
 
 
 async def test_blocks_range(client):

@@ -2,7 +2,8 @@
 
 A lightweight, tamper-evident **append-only locker** for agent-to-agent task
 handoff. One writer appends hash-chained blocks, seals the pad, and hands off a
-read ticket; one reader verifies the chain end-to-end.
+read ticket; one reader verifies the chain end-to-end. Ships with a stdio MCP
+server (`lockermcp`) so AI agents can drive it natively.
 
 Python / FastAPI + aiosqlite (single-file SQLite, WAL mode). No Redis, no S3,
 no external services.
@@ -13,8 +14,8 @@ no external services.
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-LOCKER_DB=locker.db AUTH_MODE=local python -m lockerd
-# or: uvicorn lockerd.main:create_app --factory
+LOCKER_DB=locker.db AUTH_MODE=local python -m lockerd        # the daemon (HTTP)
+LOCKER_URL=http://127.0.0.1:8000 python -m lockermcp         # the MCP server (stdio)
 ```
 
 ## API
@@ -27,31 +28,21 @@ LOCKER_DB=locker.db AUTH_MODE=local python -m lockerd
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
 | GET    | `/v1/pads/{id}/blocks` | `?ticket=<read_ticket>` | bounded slice of blocks |
 
-Full walkthrough:
+## Handoff envelope (block 0)
 
-```bash
-# 1. create a pad
-curl -s -X POST localhost:8000/v1/pads \
-  -H 'Content-Type: application/json' \
-  -d '{"ttl_seconds": 3600, "max_blocks": 8}'
-# -> {"pad_id":"…","write_key":"…","read_ticket":"…"}
+Block 0 must be a strict `locker.handoff.v1` envelope — rejected unless every
+field is present and correctly typed:
 
-# 2. block 0 MUST be a locker.handoff.v1 envelope
-curl -s -X POST localhost:8000/v1/pads/$PAD/append \
-  -H "Authorization: Bearer $WK" -H 'Content-Type: application/json' \
-  -d '{"schema":"locker.handoff.v1","sender":"a","recipient":"b","task":"summarize"}'
-
-# 3. append payloads (raw JSON or text, up to 64 KB each)
-curl -s -X POST localhost:8000/v1/pads/$PAD/append \
-  -H "Authorization: Bearer $WK" -H 'Content-Type: text/plain' \
-  --data-binary 'hello world'
-
-# 4. seal (revokes writes)
-curl -s -X POST localhost:8000/v1/pads/$PAD/seal -H "Authorization: Bearer $WK"
-
-# 5. read back — manifest is free, blocks need the ticket
-curl -s localhost:8000/v1/pads/$PAD/manifest
-curl -s "localhost:8000/v1/pads/$PAD/blocks?ticket=$RT&from=0&to=5"
+```json
+{
+  "schema": "locker.handoff.v1",
+  "task_id": "str",
+  "from_agent": "str",
+  "to_agent": "str",
+  "constraints": ["str"],
+  "artifacts": [{"any": "dict"}],
+  "budget_usd": 1.25          // float, or null
+}
 ```
 
 ## Hash chain & tamper-evidence
@@ -69,16 +60,37 @@ the chain. The `/blocks` response includes `prev_hash`, `curr_hash`, and the
 base64 payload (`payload_utf8` when text-decodable), so verification is
 self-contained.
 
-## Auth
+## Auth & tickets
 
 - **write_key** — returned once at creation; only its sha256 hash is stored.
   `append`/`seal` verify `sha256(presented_key) == write_key_hash`.
-- **read_ticket** — v1 issues a `read_once` ticket (`max_reads = 1`): the first
-  successful `/blocks` read consumes it; a second read returns 403. The schema
-  also supports `read_unlimited`, but v1 has no endpoint to mint extra tickets
-  (future work). Tickets are scoped to their pad.
-- `manifest` is free (public metadata: counts, head hash, timestamps) and does
-  not consume a read.
+- **read_once = a read lease.** The first successful `/blocks` read opens a
+  window (default 10 minutes, `LOCKER_READ_LEASE_SECONDS`). Reads inside the
+  window are unlimited; after it, the ticket returns 403. This lets a reader
+  grab block 0 (the envelope) first and then the remaining blocks without
+  burning the ticket.
+- **read_unlimited** — supported in the schema, but v1 has no endpoint to mint
+  extra tickets (future work). Tickets are scoped to their pad.
+- `manifest` is free (public metadata) and does not touch the lease.
+
+## MCP server (`lockermcp`)
+
+Five tools over stdio (Python MCP SDK v2, `MCPServer`):
+
+- `locker_create(ttl_seconds, max_blocks=32)` → `{pad_id, write_key, read_ticket}`
+- `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}`
+- `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}`
+- `locker_manifest(pad_id, ticket=None)` → manifest (free on the daemon)
+- `locker_read_blocks(pad_id, ticket, from_block=0, to_block=0)` → blocks slice
+
+`locker_read_blocks` defaults to **block 0 (the envelope) first**, so a reader
+naturally starts with the envelope before requesting the rest.
+
+Two-agent smoke test (starts its own daemon):
+
+```bash
+.venv/bin/python scripts/mcp_smoke.py
+```
 
 ## Configuration
 
@@ -88,6 +100,8 @@ self-contained.
 | `AUTH_MODE` | `local` | `local` (ticket bypass) or `x402` (payment) |
 | `LOCKER_HOST` | `127.0.0.1` | bind host (`python -m lockerd`) |
 | `LOCKER_PORT` | `8000` | bind port (`python -m lockerd`) |
+| `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
+| `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` |
 
 Hard limits (memory-safe): 64 KB per block, 256 KB per pad (byte quota), 32
 blocks default (configurable at creation, capped at 4096), 64 KB payload per
@@ -97,29 +111,13 @@ cap, so an oversized body is rejected before it is fully buffered.
 ## Testing
 
 ```bash
-pytest -q          # 22 behavioral tests (spec'd API + quotas + expiry + tamper)
+pytest -q                          # 23 behavioral tests (API + quotas + lease + tamper)
+.venv/bin/python scripts/mcp_smoke.py   # two-agent MCP handoff, end-to-end
 ```
 
-## Spec gaps resolved (v1 decisions)
+## Notes
 
-The original spec left a few things undefined; these are the interpretations
-chosen for v1:
-
-- **`locker.handoff.v1` envelope** — not defined in the spec. Defined here as a
-  JSON object carrying at least `schema`, plus optional `sender`, `recipient`,
-  `task`, `nonce`, `created_at`. Block 0 is rejected unless it matches.
-- **`Authorization: Bearer ***`** — the `***` is redaction; implemented as
-  `Bearer <write_key>`.
-- **`AUTH_MODE=x402`** — no payment provider/mechanism is specified. v1 returns
-  HTTP 402 with a clear error and a single, obvious extension point; `local`
-  mode is fully implemented.
-- **read ticket type** — unspecified; v1 issues `read_once` (matches the
-  schema's `max_reads = 1` default and single-handoff semantics).
-- **"Free." on manifest** — interpreted as *no auth required*.
-- **"max 64 KB per response"** — interpreted as ≤64 KB total payload per slice
-  (base64 inflates serialized size), plus a 256-block cap.
-- **ttl** gates writes (append/seal), not reads: sealed data stays readable
-  after expiry, and expiry is enforced lazily on access (no background jobs).
-
-Alternative: Go is also permitted by the spec; this implementation is Python
-because it matches the surrounding toolchain. Say the word to port.
+- `AUTH_MODE=x402` returns HTTP 402 with a clear error and one obvious extension
+  point; no payment provider is wired yet.
+- The DB schema gained a `tickets.lease_started_at` column; the DB file is
+  gitignored/regenerable, so delete an old one rather than migrating.

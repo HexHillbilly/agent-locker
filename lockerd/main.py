@@ -21,7 +21,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         conn = await db.connect(config.db_path)
-        app.state.store = db.Store(conn)
+        app.state.store = db.Store(conn, config.read_lease_seconds)
         yield
         await conn.close()
 
@@ -131,8 +131,10 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 raise HTTPException(409, "block quota exceeded")
             if pad["current_bytes"] + len(payload) > pad["max_bytes"]:
                 raise HTTPException(409, "byte quota exceeded")
-            if seq == 0 and not hashchain.is_envelope(payload):
-                raise HTTPException(400, f"block 0 must be a {hashchain.ENVELOPE_SCHEMA} envelope")
+            if seq == 0:
+                env_err = hashchain.envelope_error(payload)
+                if env_err:
+                    raise HTTPException(400, f"block 0 invalid envelope: {env_err}")
 
             prev_hash = pad["head_hash"]
             curr_hash = hashchain.compute_hash(prev_hash, payload)
@@ -201,7 +203,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             if status == "invalid":
                 raise HTTPException(401, "invalid read ticket")
             if status == "exhausted":
-                raise HTTPException(403, "read ticket exhausted")
+                raise HTTPException(403, "read ticket lease expired")
 
             pad = await s.get_pad(pad_id)
             if pad is None:
@@ -230,7 +232,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 raise HTTPException(413,
                                     f"slice payload exceeds {cfg.MAX_RESPONSE_BYTES} bytes; narrow from/to")
 
-            await s.redeem_ticket(ticket)
+            await s.record_read(ticket)
             blocks_out = [
                 {
                     "seq": r["seq"],

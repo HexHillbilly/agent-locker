@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS tickets (
      type TEXT CHECK(type IN ('read_once', 'read_unlimited')) NOT NULL,
      redeemed_count INTEGER NOT NULL DEFAULT 0,
      max_reads INTEGER NOT NULL DEFAULT 1,
+     lease_started_at INTEGER,
      created_at INTEGER NOT NULL
 );
 
@@ -73,9 +74,10 @@ async def connect(path: str) -> aiosqlite.Connection:
 
 
 class Store:
-    def __init__(self, conn: aiosqlite.Connection):
+    def __init__(self, conn: aiosqlite.Connection, read_lease_seconds: int = cfg.READ_LEASE_SECONDS):
         self.conn = conn
         self.lock = asyncio.Lock()
+        self.read_lease_seconds = read_lease_seconds
 
     # ---- pads ----
     async def create_pad(self, pad_id, write_key_hash, ttl_seconds, max_blocks):
@@ -149,7 +151,12 @@ class Store:
         await self.conn.commit()
 
     async def check_ticket(self, pad_id, ticket_id):
-        """Return 'ok', 'invalid', or 'exhausted' without consuming a read."""
+        """Return 'ok', 'invalid', or 'exhausted' without consuming a read.
+
+        ``read_once`` tickets carry a read *lease*: the first successful read
+        opens a ``read_lease_seconds`` window; reads inside it are allowed and
+        reads after it are rejected.
+        """
         cur = await self.conn.execute(
             "SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)
         )
@@ -157,15 +164,17 @@ class Store:
         await cur.close()
         if row is None or row["pad_id"] != pad_id:
             return "invalid"
-        if row["type"] == "read_once" and row["redeemed_count"] >= row["max_reads"]:
-            return "exhausted"
+        if row["type"] == "read_once" and row["lease_started_at"] is not None:
+            if now() - row["lease_started_at"] > self.read_lease_seconds:
+                return "exhausted"
         return "ok"
 
-    async def redeem_ticket(self, ticket_id):
-        """Consume one read on a read_once ticket (no-op for read_unlimited)."""
+    async def record_read(self, ticket_id):
+        """Record a successful read: open the lease on first read (read_once)."""
         await self.conn.execute(
-            "UPDATE tickets SET redeemed_count = redeemed_count + 1"
+            "UPDATE tickets SET redeemed_count = redeemed_count + 1,"
+            " lease_started_at = COALESCE(lease_started_at, ?)"
             " WHERE ticket_id = ? AND type = 'read_once'",
-            (ticket_id,),
+            (now(), ticket_id),
         )
         await self.conn.commit()
