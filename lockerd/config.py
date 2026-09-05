@@ -15,8 +15,12 @@ MAX_TTL_SECONDS = 30 * 24 * 3600     # 30 days
 READ_LEASE_SECONDS = 600             # read_once ticket lease window (10 min)
 ZERO_HASH = "0" * 64
 
-AUTH_LOCAL = "local"
-AUTH_X402 = "x402"
+# Auth modes (canonical)
+AUTH_OPEN = "open"      # open/local access, no payment required (default)
+AUTH_TXID = "txid"      # tx-hash receipt verification (Base USDC)
+# Legacy aliases (kept for backward compatibility)
+AUTH_LOCAL = AUTH_OPEN
+AUTH_X402 = AUTH_TXID
 
 # x402 payment defaults (Base USDC)
 DEFAULT_BASE_RPC_URL = "https://mainnet.base.org"
@@ -24,10 +28,20 @@ DEFAULT_USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 DEFAULT_REQUIRED_USDC_UNITS = 2000   # 0.002 USDC (6 decimals)
 
 
+def normalize_mode(mode: str) -> str:
+    """Map legacy mode labels to canonical values."""
+    m = (mode or "").strip().lower()
+    if m in ("open", "local", "dev"):
+        return AUTH_OPEN
+    if m in ("txid", "x402"):
+        return AUTH_TXID
+    return AUTH_OPEN  # unknown -> open (developer-friendly default)
+
+
 @dataclass
 class Config:
     db_path: str = "locker.db"
-    auth_mode: str = AUTH_LOCAL
+    auth_mode: str = AUTH_OPEN
     read_lease_seconds: int = READ_LEASE_SECONDS
     payment_wallet_address: str | None = None
     base_rpc_url: str = DEFAULT_BASE_RPC_URL
@@ -38,7 +52,7 @@ class Config:
     def from_env(cls) -> "Config":
         return cls(
             db_path=os.environ.get("LOCKER_DB_PATH", "locker.db"),
-            auth_mode=os.environ.get("LOCKER_MODE", AUTH_LOCAL),
+            auth_mode=normalize_mode(os.environ.get("LOCKER_MODE", AUTH_OPEN)),
             read_lease_seconds=int(os.environ.get("LOCKER_READ_LEASE_SECONDS", READ_LEASE_SECONDS)),
             payment_wallet_address=os.environ.get("PAYMENT_WALLET_ADDRESS") or None,
             base_rpc_url=os.environ.get("BASE_RPC_URL", DEFAULT_BASE_RPC_URL),

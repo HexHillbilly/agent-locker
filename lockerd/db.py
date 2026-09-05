@@ -224,3 +224,30 @@ class Store:
             (now(), ticket_id),
         )
         await self.conn.commit()
+
+    # ---- health ----
+    async def health_check(self):
+        """Return ``(writable, wal_mode, active_pads)`` for the /health endpoint."""
+        cur = await self.conn.execute("PRAGMA query_only")
+        row = await cur.fetchone()
+        await cur.close()
+        read_only = bool(row[0]) if row else False
+
+        cur = await self.conn.execute("PRAGMA journal_mode")
+        row = await cur.fetchone()
+        await cur.close()
+        wal_mode = ((row[0] or "").lower() if row else "") == "wal"
+
+        writable = not read_only
+        if writable:
+            try:
+                await self.conn.execute("BEGIN IMMEDIATE")
+                await self.conn.execute("ROLLBACK")
+            except Exception:
+                writable = False
+
+        cur = await self.conn.execute("SELECT COUNT(*) AS c FROM pads WHERE state='open'")
+        row = await cur.fetchone()
+        await cur.close()
+        active_pads = row["c"]
+        return writable, wal_mode, active_pads

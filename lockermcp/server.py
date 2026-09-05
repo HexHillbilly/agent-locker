@@ -57,7 +57,9 @@ def _request(method: str, path: str, token: str | None = None,
             challenge = r.json()
         except Exception:
             challenge = {"error": "payment_required", "detail": r.text}
-        raise PaymentRequired(challenge)
+        if isinstance(challenge, dict) and ("recipient" in challenge or "network" in challenge):
+            raise PaymentRequired(challenge)  # genuine x402/txid challenge
+        raise LockerError(402, challenge.get("detail", str(challenge)))  # verification failure
     if r.status_code >= 400:
         try:
             detail = r.json().get("detail", r.text)

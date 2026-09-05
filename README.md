@@ -14,7 +14,7 @@ no external services.
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-LOCKER_DB_PATH=locker.db LOCKER_MODE=local python -m lockerd   # the daemon (HTTP)
+LOCKER_DB_PATH=locker.db LOCKER_MODE=open python -m lockerd   # the daemon (HTTP)
 LOCKER_URL=http://127.0.0.1:8000 python -m lockermcp          # the MCP server (stdio)
 ```
 
@@ -29,6 +29,10 @@ See `.env.example` for every runtime variable.
 | POST   | `/v1/pads/{id}/seal` | `Bearer <write_key>` | freeze the pad, revoke writes |
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
 | GET    | `/v1/pads/{id}/blocks` | `?ticket=<read_ticket>` | bounded slice of blocks |
+| GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
+
+`demo-pad-v1` is a permanent read-only pad seeded on startup; its blocks are
+readable without a ticket (`GET /v1/pads/demo-pad-v1/blocks`).
 
 ## Handoff envelope (block 0)
 
@@ -75,9 +79,9 @@ self-contained.
   extra tickets (future work). Tickets are scoped to their pad.
 - `manifest` is free (public metadata) and does not touch the lease.
 
-## Payments (x402)
+## Payments (txid)
 
-Opt-in pay-per-pad using USDC on Base. Set `LOCKER_MODE=x402` (default `local`)
+Opt-in pay-per-pad using USDC on Base. Set `LOCKER_MODE=txid` (default `open`)
 to require proof of payment on `POST /v1/pads`.
 
 - No `X-Payment-Proof` header → `HTTP 402` with a JSON challenge
@@ -121,6 +125,9 @@ Register with Claude Code / Cursor / Open WebUI via `mcp_config.example.json`
 ```bash
 # Inspect a pad and verify its chain (stdlib only, no deps)
 python scripts/inspect_pad.py <pad_id> --ticket <read_ticket> [--url http://127.0.0.1:8000]
+
+# Two-agent handoff demo against a running daemon (open mode)
+python demo_handoff.py [http://127.0.0.1:8000]
 ```
 
 Prints pad state, block count, total bytes, sealed status, head hash, and an
@@ -130,13 +137,13 @@ explicit SHA-256 chain verification.
 
 | Env var | Default | Meaning |
 |---------|---------|---------|
-| `LOCKER_MODE` | `local` | `local` (ticket bypass) or `x402` (payment) |
+| `LOCKER_MODE` | `open` | `open` (no payment; aliases `local`/`dev`) or `txid` (Base USDC receipt check; alias `x402`) |
 | `LOCKER_DB_PATH` | `locker.db` | SQLite file path |
 | `LOCKER_HOST` | `127.0.0.1` | bind host (`python -m lockerd`) |
 | `LOCKER_PORT` | `8000` | bind port (`python -m lockerd`) |
 | `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
 | `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` |
-| `PAYMENT_WALLET_ADDRESS` | (unset) | receiving EVM address (required in x402 mode) |
+| `PAYMENT_WALLET_ADDRESS` | (unset) | receiving EVM address (required in txid mode) |
 | `BASE_RPC_URL` | `https://mainnet.base.org` | Base JSON-RPC endpoint |
 | `REQUIRED_USDC_UNITS` | `2000` | minimum payment (USDC units, 6 decimals) |
 | `USDC_CONTRACT` | `0x8335…A02913` | Base native USDC token contract |
@@ -162,7 +169,7 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 ## Testing
 
 ```bash
-pytest -q                                    # 23 behavioral tests (API + quotas + lease + tamper)
+pytest -q                                    # 39 tests (API + quotas + lease + tamper + payments + hardening)
 .venv/bin/python scripts/test_handoff_e2e.py # two-agent handoff over MCP: planner/worker,
                                              # post-seal rejection, lease expiry, tamper
 .venv/bin/python scripts/dogfood_llm.py      # live-LLM dogfood: a real model drives lockermcp as
@@ -171,7 +178,7 @@ pytest -q                                    # 23 behavioral tests (API + quotas
 
 ## Notes
 
-- `LOCKER_MODE=x402` returns HTTP 402 with a clear error and one obvious extension
-  point; no payment provider is wired yet.
+- `LOCKER_MODE=txid` verifies a Base USDC transfer via `eth_getTransactionReceipt`
+  and returns HTTP 402 with a challenge when no proof is presented.
 - The DB schema carries a `tickets.lease_started_at` column; the DB file is
   gitignored/regenerable, so delete an old one rather than migrating.

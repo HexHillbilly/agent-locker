@@ -1,0 +1,30 @@
+# Static site for padlockspace.org.
+#
+# Fixes the "catch-all false 200" bug: Caddy previously served the 57-byte
+# homepage string on every path (/llms.txt, /.well-known/mcp.json, /robots.txt),
+# poisoning crawler caches. This config serves the real crawler-facing files
+# from /var/www/padlockspace/ and returns a true 404 for anything unmapped.
+#
+# Deploy: copy the static files (llms.txt, robots.txt, .well-known/mcp.json)
+# to /var/www/padlockspace/ on the node, then load this site block.
+
+padlockspace.org, www.padlockspace.org {
+	encode gzip
+	root * /var/www/padlockspace
+
+	# Explicit file serving for crawler-facing paths.
+	handle /llms.txt {
+		file_server
+	}
+	handle /robots.txt {
+		file_server
+	}
+	handle /.well-known/mcp.json {
+		file_server
+	}
+
+	# Homepage and any other real file (no SPA fallback).
+	handle {
+		file_server
+	}
+}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -12,9 +13,15 @@ USDC_DECIMALS = 6
 # keccak256("Transfer(address,address,uint256)")
 TRANSFER_EVENT_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
+TX_HASH_RE = re.compile(r"^0x[a-fA-F0-9]{64}$")
+
 
 class PaymentVerificationError(Exception):
     """Raised when a payment proof fails validation."""
+
+
+class RPCError(Exception):
+    """Raised when the RPC provider is unreachable or returns a malformed/errored response."""
 
 
 def usdc_amount(units: int) -> str:
@@ -44,21 +51,45 @@ def build_challenge(wallet: str, usdc_contract: str, required_units: int) -> dic
     }
 
 
+def validate_tx_hash(tx_hash: str) -> bool:
+    """Return True if ``tx_hash`` is a well-formed 0x-prefixed 32-byte hex hash."""
+    return bool(TX_HASH_RE.match(tx_hash or ""))
+
+
 async def get_transaction_receipt(rpc_url: str, tx_hash: str) -> dict:
     """Fetch the receipt for ``tx_hash`` via eth_getTransactionReceipt.
 
     Returns the parsed JSON-RPC ``result`` (a receipt dict) or ``None`` if the
-    transaction is not (yet) known to the node.
+    transaction is not (yet) known to the node. Never leaks raw provider errors.
     """
     payload = {"jsonrpc": "2.0", "id": 1, "method": "eth_getTransactionReceipt",
                "params": [tx_hash]}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.post(rpc_url, json=payload)
-        r.raise_for_status()
-    data = r.json()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(rpc_url, json=payload)
+            r.raise_for_status()
+        data = r.json()
+    except httpx.HTTPError:
+        raise RPCError("rpc provider unreachable")
+    except (ValueError, KeyError):
+        raise RPCError("rpc provider returned an invalid response")
     if data.get("error"):
-        raise PaymentVerificationError(f"RPC error: {data['error']}")
+        # Sanitize: never surface the raw JSON-RPC error dict to the client.
+        raise RPCError("rpc provider error")
     return data.get("result")
+
+
+async def rpc_reachable(rpc_url: str) -> bool:
+    """Probe the RPC endpoint with a cheap eth_chainId call (2s timeout)."""
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.post(rpc_url, json={"jsonrpc": "2.0", "id": 1,
+                                                 "method": "eth_chainId", "params": []})
+            r.raise_for_status()
+            data = r.json()
+            return bool(data.get("result")) and not data.get("error")
+    except Exception:
+        return False
 
 
 def _address_from_topic(topic: str) -> str:

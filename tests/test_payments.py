@@ -149,3 +149,12 @@ async def test_x402_missing_wallet_config(tmp_path):
             r = await c.post("/v1/pads", json={"ttl_seconds": 60, "max_blocks": 4},
                              headers={"X-Payment-Proof": "0x1234"})
             assert r.status_code == 500
+
+
+# 7. Malformed tx_hash -> 400 with sanitized message (never reaches RPC)
+async def test_x402_malformed_tx_hash_rejected(x402_client):
+    client, _ = x402_client
+    r = await client.post("/v1/pads", json={"ttl_seconds": 60, "max_blocks": 4},
+                          headers={"X-Payment-Proof": "0x1234"})
+    assert r.status_code == 400
+    assert r.json() == {"detail": "payment verification failed: invalid transaction format"}

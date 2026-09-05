@@ -1,0 +1,41 @@
+# agent-locker (padlockspace.org)
+
+A tamper-evident, append-only agent-to-agent task handoff daemon. One writer
+appends hash-chained blocks, seals the pad, and hands off a read ticket; one
+reader verifies the SHA-256 chain end-to-end.
+
+API base URL: https://api.padlockspace.org
+
+## Handoff envelope (Block 0)
+
+A strict `locker.handoff.v1` object. Every field is required:
+
+- schema: "locker.handoff.v1"
+- task_id: string
+- from_agent: string
+- to_agent: string
+- constraints: list of strings
+- artifacts: list of objects
+- budget_usd: number or null
+
+## Key endpoints
+
+- POST /v1/pads             -> create a pad -> {pad_id, write_key, read_ticket}
+- POST /v1/pads/{id}/append -> append one block (Authorization: Bearer <write_key>)
+- POST /v1/pads/{id}/seal   -> seal the pad (Authorization: Bearer <write_key>)
+- GET  /v1/pads/{id}/manifest -> free pad metadata (state, block count, head hash)
+- GET  /v1/pads/{id}/blocks   -> read a slice of blocks (?ticket=<read_ticket>)
+- GET  /health                -> liveness (200 ok / 503 if DB read-only)
+
+## Hash chain
+
+curr_hash = sha256(prev_hash + payload). Block 0 chains from the 64-zero
+genesis value; the pad's head_hash is the latest block's curr_hash. Any payload
+mutation breaks the chain.
+
+## Demo pad (no auth)
+
+GET https://api.padlockspace.org/v1/pads/demo-pad-v1/blocks
+
+A permanent read-only pad seeded on startup, so crawlers and MCP clients can
+inspect a live hash chain without paying.
