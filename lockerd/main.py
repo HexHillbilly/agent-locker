@@ -9,8 +9,9 @@ import secrets
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import __version__ as VERSION
 from . import config as cfg
@@ -36,11 +37,29 @@ def api_error(status_code: int, code: str, detail: str) -> HTTPException:
                          detail={"error": code, "detail": detail})
 
 
+ERROR_RESPONSES = {
+    400: {"description": "Bad request (invalid envelope, empty payload, or malformed tx hash)"},
+    401: {"description": "Unauthorized (missing or invalid write key / read ticket)"},
+    402: {"description": "Payment required (txid challenge or failed verification)"},
+    403: {"description": "Forbidden (read ticket lease expired)"},
+    404: {"description": "Not found (pad does not exist)"},
+    409: {"description": "Conflict (pad sealed, quota exceeded, or payment already redeemed)"},
+    413: {"description": "Payload too large (block or slice limit exceeded)"},
+    422: {"description": "Unprocessable (invalid request body or range)"},
+    502: {"description": "Bad gateway (Base RPC provider unreachable)"},
+}
+
+
+def _err(*codes: int) -> dict:
+    """Responses dict documenting the given HTTP status codes."""
+    return {c: ERROR_RESPONSES[c] for c in codes}
+
+
 async def seed_demo_pad(store: db.Store) -> None:
     """Provision the permanent read-only demo pad if it does not exist."""
     if await store.get_pad(DEMO_PAD_ID) is not None:
         return
-    write_key = secrets.token_urlsafe(32)
+    write_key = "demo-write-key"  # published test key (SHA-256 hashed on insert)
     ttl = 100 * 365 * 24 * 3600  # effectively permanent
     await store.create_pad(DEMO_PAD_ID, hashchain.sha256_hex(write_key.encode()),
                            ttl, cfg.DEFAULT_MAX_BLOCKS)
@@ -89,6 +108,8 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"detail": detail},
                             headers=getattr(exc, "headers", None))
 
+    bearer_scheme = HTTPBearer(auto_error=False)
+
     # ---- helpers ----
     def store(request: Request) -> db.Store:
         return request.app.state.store
@@ -120,16 +141,17 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
 
     # ---- endpoints ----
 
-    @app.get("/health", response_model=HealthResponse)
+    @app.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
     async def health(request: Request):
         s = store(request)
-        writable, wal_mode, active_pads = await s.health_check()
+        writable, wal_mode, total, unsealed, sealed = await s.health_check()
+        pads = {"total": total, "unsealed": unsealed, "sealed": sealed}
         if not writable:
             return JSONResponse(status_code=503, content={
                 "status": "unavailable", "version": VERSION,
                 "database": {"writable": False, "wal_mode": wal_mode},
                 "rpc": {"network": "base", "reachable": None},
-                "active_pads": active_pads,
+                "pads": pads,
             })
         rpc_ok = True
         if config.auth_mode == cfg.AUTH_TXID:
@@ -138,10 +160,11 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             "status": "ok", "version": VERSION,
             "database": {"writable": writable, "wal_mode": wal_mode},
             "rpc": {"network": "base", "reachable": rpc_ok},
-            "active_pads": active_pads,
+            "pads": pads,
         }
 
-    @app.post("/v1/pads", status_code=201, response_model=PadCreatedResponse)
+    @app.post("/v1/pads", status_code=201, response_model=PadCreatedResponse,
+              responses=_err(400, 402, 409, 502))
     async def create_pad(request: Request, body: PadCreateRequest):
         tx_hash = None
         payer_address = None
@@ -199,9 +222,25 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         return {"pad_id": pad_id, "write_key": write_key, "read_ticket": read_ticket}
 
     @app.post("/v1/pads/{pad_id}/append", status_code=201,
-              response_model=AppendResponse)
-    async def append(pad_id: str, request: Request):
-        write_key = extract_bearer(request)
+              response_model=AppendResponse,
+              responses=_err(400, 401, 404, 409, 413),
+              openapi_extra={
+                  "requestBody": {
+                      "required": True,
+                      "content": {
+                          "application/octet-stream": {
+                              "schema": {"type": "string", "format": "binary",
+                                         "description": "Raw block payload bytes (≤64 KB). Block 0 must be a locker.handoff.v1 envelope."},
+                          },
+                          "application/json": {
+                              "schema": {"description": "JSON-encoded block payload (≤64 KB). Block 0 must be a locker.handoff.v1 envelope."},
+                          },
+                      },
+                  },
+              })
+    async def append(pad_id: str, request: Request,
+                     auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+        write_key = auth.credentials if auth else None
         payload = await read_body(request, cfg.MAX_BLOCK_BYTES)
         if payload is None:
             raise api_error(413, "payload_too_large",
@@ -241,9 +280,11 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                                  content_type, payload)
         return {"pad_id": pad_id, "seq": seq, "curr_hash": curr_hash}
 
-    @app.post("/v1/pads/{pad_id}/seal", response_model=SealResponse)
-    async def seal(pad_id: str, request: Request):
-        write_key = extract_bearer(request)
+    @app.post("/v1/pads/{pad_id}/seal", response_model=SealResponse,
+              responses=_err(401, 404, 409))
+    async def seal(pad_id: str, request: Request,
+                   auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+        write_key = auth.credentials if auth else None
         s = store(request)
         async with s.lock:
             pad = await s.get_pad(pad_id)
@@ -262,7 +303,8 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         return {"pad_id": pad_id, "state": pad["state"],
                 "sealed_at": pad["sealed_at"], "head_hash": pad["head_hash"]}
 
-    @app.get("/v1/pads/{pad_id}/manifest", response_model=ManifestResponse)
+    @app.get("/v1/pads/{pad_id}/manifest", response_model=ManifestResponse,
+             responses=_err(404))
     async def manifest(pad_id: str, request: Request):
         s = store(request)
         async with s.lock:
@@ -282,7 +324,8 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             "expires_at": pad["expires_at"],
         }
 
-    @app.get("/v1/pads/{pad_id}/blocks", response_model=BlocksResponse)
+    @app.get("/v1/pads/{pad_id}/blocks", response_model=BlocksResponse,
+             responses=_err(401, 403, 404, 413, 422))
     async def blocks(
         pad_id: str,
         request: Request,
@@ -293,6 +336,10 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         is_demo = pad_id == DEMO_PAD_ID
         s = store(request)
         async with s.lock:
+            pad = await s.get_pad(pad_id)
+            if pad is None:
+                raise api_error(404, "not_found", "pad not found")
+
             if not is_demo:
                 ticket = ticket or extract_bearer(request)
                 if not ticket:
@@ -303,9 +350,6 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 if status == "exhausted":
                     raise api_error(403, "forbidden", "read ticket lease expired")
 
-            pad = await s.get_pad(pad_id)
-            if pad is None:
-                raise api_error(404, "not_found", "pad not found")
             await s.expire_pad_if_needed(pad)
 
             total_blocks = await s.block_count(pad_id)

@@ -6,6 +6,16 @@ reader verifies the SHA-256 chain end-to-end.
 
 API base URL: https://api.padlockspace.org
 
+## Threat model
+
+Tamper-evident client validation: SHA-256 chain is verified programmatically
+by the client library prior to feeding blocks into LLM context, preventing
+context drift and transport manipulation. It does not replace decentralized
+consensus against a malicious VPS operator.
+
+Block 0 `locker.handoff.v1` schema validation is enforced client-side via
+`lockermcp`.
+
 ## Handoff envelope (Block 0)
 
 A strict `locker.handoff.v1` object. Every field is required:
@@ -39,3 +49,8 @@ GET https://api.padlockspace.org/v1/pads/demo-pad-v1/blocks
 
 A permanent read-only pad seeded on startup, so crawlers and MCP clients can
 inspect a live hash chain without paying.
+
+Verify 409 handling against the immutable sealed pad: the demo pad is seeded
+with the published test write key `demo-write-key` (SHA-256 hashed on insert).
+Calling `POST /v1/pads/demo-pad-v1/append` with `Authorization: Bearer
+demo-write-key` proves `409 Conflict` handling against a sealed pad.

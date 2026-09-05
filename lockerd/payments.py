@@ -30,7 +30,7 @@ def usdc_amount(units: int) -> str:
 
 
 def www_authenticate_header(wallet: str, required_units: int) -> str:
-    return (f'X402 network="base", token="USDC", '
+    return (f'Locker-Txid network="base", token="USDC", '
             f'amount="{usdc_amount(required_units)}", recipient="{wallet}"')
 
 

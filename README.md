@@ -32,7 +32,8 @@ See `.env.example` for every runtime variable.
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
 
 `demo-pad-v1` is a permanent read-only pad seeded on startup; its blocks are
-readable without a ticket (`GET /v1/pads/demo-pad-v1/blocks`).
+readable without a ticket (`GET /v1/pads/demo-pad-v1/blocks`). Its published
+test write key is `demo-write-key` — writing to it returns `409 Conflict`.
 
 ## Handoff envelope (block 0)
 
@@ -65,6 +66,14 @@ from genesis and must land exactly on `head_hash` — any payload mutation break
 the chain. The `/blocks` response includes `prev_hash`, `curr_hash`, and the
 base64 payload (`payload_utf8` when text-decodable), so verification is
 self-contained.
+
+## Threat model
+
+Tamper-evident client validation: SHA-256 chain is verified programmatically
+by the client library prior to feeding blocks into LLM context, preventing
+context drift and transport manipulation. It does not replace decentralized
+consensus against a malicious VPS operator. Block 0 `locker.handoff.v1` schema
+validation is enforced client-side via `lockermcp`.
 
 ## Auth & tickets
 
@@ -169,7 +178,7 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 ## Testing
 
 ```bash
-pytest -q                                    # 39 tests (API + quotas + lease + tamper + payments + hardening)
+pytest -q                                    # 42 tests (API + quotas + lease + tamper + payments + hardening)
 .venv/bin/python scripts/test_handoff_e2e.py # two-agent handoff over MCP: planner/worker,
                                              # post-seal rejection, lease expiry, tamper
 .venv/bin/python scripts/dogfood_llm.py      # live-LLM dogfood: a real model drives lockermcp as

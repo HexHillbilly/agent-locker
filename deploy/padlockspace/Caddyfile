@@ -5,10 +5,21 @@
 # poisoning crawler caches. This config serves the real crawler-facing files
 # from /var/www/padlockspace/ and returns a true 404 for anything unmapped.
 #
-# Deploy: copy the static files (llms.txt, robots.txt, .well-known/mcp.json)
-# to /var/www/padlockspace/ on the node, then load this site block.
+# Deploy: copy deploy/padlockspace/www/* to /var/www/padlockspace/ on the node,
+# then load this site block.
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer-when-downgrade"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
 
 padlockspace.org, www.padlockspace.org {
+	import security_headers
 	encode gzip
 	root * /var/www/padlockspace
 

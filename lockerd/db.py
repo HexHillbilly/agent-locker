@@ -227,7 +227,7 @@ class Store:
 
     # ---- health ----
     async def health_check(self):
-        """Return ``(writable, wal_mode, active_pads)`` for the /health endpoint."""
+        """Return ``(writable, wal_mode, total, unsealed, sealed)``."""
         cur = await self.conn.execute("PRAGMA query_only")
         row = await cur.fetchone()
         await cur.close()
@@ -246,8 +246,19 @@ class Store:
             except Exception:
                 writable = False
 
+        cur = await self.conn.execute("SELECT COUNT(*) AS c FROM pads")
+        row = await cur.fetchone()
+        await cur.close()
+        total = row["c"]
+
         cur = await self.conn.execute("SELECT COUNT(*) AS c FROM pads WHERE state='open'")
         row = await cur.fetchone()
         await cur.close()
-        active_pads = row["c"]
-        return writable, wal_mode, active_pads
+        unsealed = row["c"]
+
+        cur = await self.conn.execute("SELECT COUNT(*) AS c FROM pads WHERE state='sealed'")
+        row = await cur.fetchone()
+        await cur.close()
+        sealed = row["c"]
+
+        return writable, wal_mode, total, unsealed, sealed

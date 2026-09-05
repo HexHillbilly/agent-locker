@@ -2,7 +2,7 @@
   "mcpServers": {
     "lockermcp": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/HexHillbilly/agent-locker.git", "lockermcp"],
+      "args": ["lockermcp"],
       "env": {
         "LOCKER_URL": "https://api.padlockspace.org"
       }

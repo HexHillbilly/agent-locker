@@ -2,14 +2,29 @@
 #
 # Fronts the daemon (http://localhost:8000), enforces a 128 KB request-body cap,
 # and sets sane connection timeouts. Swap `:8001` for a hostname (e.g.
-# locker.lucky.lan) if you terminate TLS / route by name.
+# api.padlockspace.org) if you terminate TLS / route by name.
+
+(security_headers) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer-when-downgrade"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
 
 :8001 {
+	import security_headers
+
 	# Coarse outer upload cap. The daemon itself rejects any single block
 	# over 64 KB; 128 KB here is a generous envelope-sized bound.
 	request_body {
 		max_size 128KB
 	}
+
+	# Handoff payloads are secrets; never let intermediaries cache them.
+	header Cache-Control "no-store"
 
 	reverse_proxy localhost:8000 {
 		transport http {

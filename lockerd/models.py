@@ -84,4 +84,4 @@ class HealthResponse(BaseModel):
     version: str
     database: dict
     rpc: dict
-    active_pads: int
+    pads: dict

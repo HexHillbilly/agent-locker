@@ -98,7 +98,14 @@ async def test_health_returns_ok(client):
     assert body["database"]["wal_mode"] is True
     assert body["rpc"]["network"] == "base"
     assert body["rpc"]["reachable"] is True  # open mode never probes
-    assert isinstance(body["active_pads"], int)
+    # fresh DB: only the seeded demo pad exists
+    assert body["pads"] == {"total": 1, "unsealed": 0, "sealed": 1}
+
+
+async def test_health_head_supported(client):
+    r = await client.head("/health")
+    assert r.status_code == 200
+    assert r.content == b""  # HEAD returns no body
 
 
 # ---- Task 8: seeded demo pad + unauthenticated reads ----
@@ -126,3 +133,19 @@ async def test_demo_pad_reads_without_ticket(client):
         assert b["curr_hash"] == hashlib.sha256(prev.encode() + payload).hexdigest()
         prev = b["curr_hash"]
     assert prev == (await client.get("/v1/pads/demo-pad-v1/manifest")).json()["head_hash"]
+
+
+async def test_blocks_nonexistent_pad_is_404_not_401(client):
+    # Task 4: pad existence is checked before the read ticket.
+    r = await client.get("/v1/pads/doesnotexist/blocks")
+    assert r.status_code == 404
+    assert r.json() == {"error": "not_found", "detail": "pad not found"}
+
+
+async def test_demo_pad_sealed_write_is_409_with_published_key(client):
+    # Task 9: the published write key "demo-write-key" verifies, then the sealed
+    # state returns 409 — proving conflict handling without a secret key.
+    r = await client.post("/v1/pads/demo-pad-v1/append", content=b"x",
+                          headers={"Authorization": "Bearer demo-write-key"})
+    assert r.status_code == 409
+    assert r.json() == {"error": "conflict", "detail": "pad is sealed"}

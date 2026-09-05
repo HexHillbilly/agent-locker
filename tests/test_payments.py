@@ -75,7 +75,7 @@ async def test_x402_challenge_without_proof(x402_client):
     assert body["recipient"].lower() == WALLET.lower()
     assert "instructions" in body
     www = r.headers["www-authenticate"]
-    assert "X402" in www and WALLET in www and "USDC" in www
+    assert "Locker-Txid" in www and WALLET in www and "USDC" in www
 
 
 # 3. Success: valid receipt -> 201 + receipt recorded
