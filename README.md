@@ -86,7 +86,16 @@ Five tools over stdio (Python MCP SDK v2, `MCPServer`):
 `locker_read_blocks` defaults to **block 0 (the envelope) first**, so a reader
 naturally starts with the envelope before requesting the rest.
 
-Two-agent smoke test (starts its own daemon):
+`locker_manifest` (when given a ticket) and `locker_read_blocks` verify the full
+hash chain in Python and return an explicit integrity block — the model never
+computes SHA-256 itself:
+
+```json
+{"integrity": {"chain_valid": true, "blocks_verified": 2}}
+```
+
+Two-agent smoke test (starts its own daemon, and checks that a tampered pad
+fails verification):
 
 ```bash
 .venv/bin/python scripts/mcp_smoke.py
@@ -107,6 +116,17 @@ Hard limits (memory-safe): 64 KB per block, 256 KB per pad (byte quota), 32
 blocks default (configurable at creation, capped at 4096), 64 KB payload per
 `/blocks` slice, 256 blocks per slice. Request bodies are streamed with a hard
 cap, so an oversized body is rejected before it is fully buffered.
+
+## Docker
+
+```bash
+docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
+```
+
+- `Dockerfile`: `python:3.11-alpine`, plain `uvicorn` (no native extras to
+  compile on musl), runs as a non-root `locker` user.
+- SQLite lives at `/data/locker.db` on a named volume (`locker-data`) with WAL
+  mode enabled; the `-wal`/`-shm` sidecars sit in the same volume.
 
 ## Testing
 

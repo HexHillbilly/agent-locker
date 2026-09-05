@@ -1,0 +1,14 @@
+services:
+  lockerd:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - locker-data:/data
+    environment:
+      LOCKER_DB: /data/locker.db
+      AUTH_MODE: local
+    restart: unless-stopped
+
+volumes:
+  locker-data:
