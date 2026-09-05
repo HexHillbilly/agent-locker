@@ -1,0 +1,171 @@
+"""SQLite store (WAL mode) for pads, blocks, and tickets.
+
+Methods are intentionally lock-free; the request layer serializes compound
+operations with ``Store.lock``. A single aiosqlite connection is used.
+"""
+from __future__ import annotations
+
+import asyncio
+import time
+
+import aiosqlite
+
+from . import config as cfg
+
+
+def now() -> int:
+    """Current unix time (monkeypatchable in tests)."""
+    return int(time.time())
+
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS pads (
+     id TEXT PRIMARY KEY,
+     created_at INTEGER NOT NULL,
+     expires_at INTEGER NOT NULL,
+     max_blocks INTEGER NOT NULL DEFAULT 32,
+     max_bytes INTEGER NOT NULL DEFAULT 262144,
+     current_bytes INTEGER NOT NULL DEFAULT 0,
+     state TEXT CHECK(state IN ('open', 'sealed', 'expired')) NOT NULL DEFAULT 'open',
+     write_key_hash TEXT NOT NULL,
+     head_hash TEXT NOT NULL DEFAULT '0000000000000000000000000000000000000000000000000000000000000000',
+     sealed_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS blocks (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     pad_id TEXT NOT NULL REFERENCES pads(id),
+     seq INTEGER NOT NULL,
+     prev_hash TEXT NOT NULL,
+     curr_hash TEXT NOT NULL,
+     content_type TEXT NOT NULL DEFAULT 'application/json',
+     payload BLOB NOT NULL,
+     created_at INTEGER NOT NULL,
+     UNIQUE(pad_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS tickets (
+     ticket_id TEXT PRIMARY KEY,
+     pad_id TEXT NOT NULL REFERENCES pads(id),
+     type TEXT CHECK(type IN ('read_once', 'read_unlimited')) NOT NULL,
+     redeemed_count INTEGER NOT NULL DEFAULT 0,
+     max_reads INTEGER NOT NULL DEFAULT 1,
+     created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_blocks_pad_seq ON blocks(pad_id, seq);
+CREATE INDEX IF NOT EXISTS idx_tickets_pad ON tickets(pad_id);
+"""
+
+
+async def connect(path: str) -> aiosqlite.Connection:
+    conn = await aiosqlite.connect(path)
+    conn.row_factory = aiosqlite.Row
+    await conn.execute("PRAGMA journal_mode = WAL")
+    await conn.execute("PRAGMA foreign_keys = ON")
+    await conn.execute("PRAGMA synchronous = NORMAL")
+    for stmt in SCHEMA.split(";"):
+        stmt = stmt.strip()
+        if stmt:
+            await conn.execute(stmt)
+    await conn.commit()
+    return conn
+
+
+class Store:
+    def __init__(self, conn: aiosqlite.Connection):
+        self.conn = conn
+        self.lock = asyncio.Lock()
+
+    # ---- pads ----
+    async def create_pad(self, pad_id, write_key_hash, ttl_seconds, max_blocks):
+        t = now()
+        await self.conn.execute(
+            "INSERT INTO pads (id, created_at, expires_at, max_blocks, max_bytes, write_key_hash)"
+            " VALUES (?,?,?,?,?,?)",
+            (pad_id, t, t + ttl_seconds, max_blocks, cfg.DEFAULT_MAX_BYTES, write_key_hash),
+        )
+        await self.conn.commit()
+
+    async def get_pad(self, pad_id):
+        cur = await self.conn.execute("SELECT * FROM pads WHERE id = ?", (pad_id,))
+        row = await cur.fetchone()
+        await cur.close()
+        return dict(row) if row else None
+
+    async def expire_pad_if_needed(self, pad):
+        if pad["state"] == "open" and pad["expires_at"] <= now():
+            await self.conn.execute(
+                "UPDATE pads SET state='expired' WHERE id=? AND state='open'", (pad["id"],)
+            )
+            await self.conn.commit()
+            pad["state"] = "expired"
+        return pad
+
+    async def seal_pad(self, pad_id):
+        await self.conn.execute(
+            "UPDATE pads SET state='sealed', sealed_at=? WHERE id=?", (now(), pad_id)
+        )
+        await self.conn.commit()
+
+    # ---- blocks ----
+    async def block_count(self, pad_id):
+        cur = await self.conn.execute(
+            "SELECT COUNT(*) AS c FROM blocks WHERE pad_id=?", (pad_id,)
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        return row["c"]
+
+    async def append_block(self, pad_id, seq, prev_hash, curr_hash, content_type, payload):
+        await self.conn.execute(
+            "INSERT INTO blocks (pad_id, seq, prev_hash, curr_hash, content_type, payload, created_at)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (pad_id, seq, prev_hash, curr_hash, content_type, payload, now()),
+        )
+        await self.conn.execute(
+            "UPDATE pads SET head_hash=?, current_bytes=current_bytes+? WHERE id=?",
+            (curr_hash, len(payload), pad_id),
+        )
+        await self.conn.commit()
+
+    async def get_blocks(self, pad_id, frm, to):
+        cur = await self.conn.execute(
+            "SELECT seq, prev_hash, curr_hash, content_type, payload, created_at"
+            " FROM blocks WHERE pad_id=? AND seq BETWEEN ? AND ? ORDER BY seq",
+            (pad_id, frm, to),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+        return [dict(r) for r in rows]
+
+    # ---- tickets ----
+    async def create_ticket(self, ticket_id, pad_id, ttype, max_reads=1):
+        await self.conn.execute(
+            "INSERT INTO tickets (ticket_id, pad_id, type, max_reads, created_at)"
+            " VALUES (?,?,?,?,?)",
+            (ticket_id, pad_id, ttype, max_reads, now()),
+        )
+        await self.conn.commit()
+
+    async def check_ticket(self, pad_id, ticket_id):
+        """Return 'ok', 'invalid', or 'exhausted' without consuming a read."""
+        cur = await self.conn.execute(
+            "SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if row is None or row["pad_id"] != pad_id:
+            return "invalid"
+        if row["type"] == "read_once" and row["redeemed_count"] >= row["max_reads"]:
+            return "exhausted"
+        return "ok"
+
+    async def redeem_ticket(self, ticket_id):
+        """Consume one read on a read_once ticket (no-op for read_unlimited)."""
+        await self.conn.execute(
+            "UPDATE tickets SET redeemed_count = redeemed_count + 1"
+            " WHERE ticket_id = ? AND type = 'read_once'",
+            (ticket_id,),
+        )
+        await self.conn.commit()

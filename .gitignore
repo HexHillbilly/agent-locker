@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+
+# Database + WAL sidecars
+*.db
+*.db-wal
+*.db-shm
+
+# Test/cache
+.pytest_cache/
