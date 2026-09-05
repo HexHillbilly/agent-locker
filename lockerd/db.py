@@ -6,6 +6,7 @@ operations with ``Store.lock``. A single aiosqlite connection is used.
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import time
 
 import aiosqlite
@@ -56,6 +57,16 @@ CREATE TABLE IF NOT EXISTS tickets (
 
 CREATE INDEX IF NOT EXISTS idx_blocks_pad_seq ON blocks(pad_id, seq);
 CREATE INDEX IF NOT EXISTS idx_tickets_pad ON tickets(pad_id);
+
+CREATE TABLE IF NOT EXISTS payment_receipts (
+     tx_hash TEXT PRIMARY KEY,
+     pad_id TEXT NOT NULL REFERENCES pads(id),
+     amount_units INTEGER NOT NULL,
+     payer_address TEXT,
+     created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipts_pad_id ON payment_receipts(pad_id);
 """
 
 
@@ -88,6 +99,41 @@ class Store:
             (pad_id, t, t + ttl_seconds, max_blocks, cfg.DEFAULT_MAX_BYTES, write_key_hash),
         )
         await self.conn.commit()
+
+    async def has_receipt(self, tx_hash):
+        cur = await self.conn.execute(
+            "SELECT 1 FROM payment_receipts WHERE tx_hash = ?", (tx_hash,)
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        return row is not None
+
+    async def create_pad_with_receipt(self, pad_id, write_key_hash, ttl_seconds,
+                                      max_blocks, tx_hash, amount_units, payer_address):
+        """Atomically create a pad and record its payment receipt.
+
+        Returns False (leaving no pad behind) if ``tx_hash`` was already redeemed.
+        """
+        t = now()
+        try:
+            await self.conn.execute(
+                "INSERT INTO pads (id, created_at, expires_at, max_blocks, max_bytes, write_key_hash)"
+                " VALUES (?,?,?,?,?,?)",
+                (pad_id, t, t + ttl_seconds, max_blocks, cfg.DEFAULT_MAX_BYTES, write_key_hash),
+            )
+            await self.conn.execute(
+                "INSERT INTO payment_receipts (tx_hash, pad_id, amount_units, payer_address, created_at)"
+                " VALUES (?,?,?,?,?)",
+                (tx_hash, pad_id, amount_units, payer_address, t),
+            )
+            await self.conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            await self.conn.rollback()
+            return False
+        except Exception:
+            await self.conn.rollback()
+            raise
 
     async def get_pad(self, pad_id):
         cur = await self.conn.execute("SELECT * FROM pads WHERE id = ?", (pad_id,))

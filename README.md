@@ -75,6 +75,22 @@ self-contained.
   extra tickets (future work). Tickets are scoped to their pad.
 - `manifest` is free (public metadata) and does not touch the lease.
 
+## Payments (x402)
+
+Opt-in pay-per-pad using USDC on Base. Set `LOCKER_MODE=x402` (default `local`)
+to require proof of payment on `POST /v1/pads`.
+
+- No `X-Payment-Proof` header → `HTTP 402` with a JSON challenge
+  (`error`, `network`, `chain_id` 8453, `currency`, `token_contract`, `amount`,
+  `amount_units`, `recipient`, `instructions`) plus a
+  `WWW-Authenticate: X402 …` header.
+- With `X-Payment-Proof: <tx_hash>` → the daemon verifies on-chain via
+  `eth_getTransactionReceipt`: status `0x1`, a USDC `Transfer` event to
+  `PAYMENT_WALLET_ADDRESS` for ≥ `REQUIRED_USDC_UNITS`, then records the tx in the
+  append-only `payment_receipts` table (`tx_hash` is the primary key → replay-proof).
+- `lockermcp` `locker_create` / `locker_deposit` accept an optional `payment_tx_hash`
+  and surface the structured 402 challenge in their error object.
+
 ## MCP server (`lockermcp`)
 
 Six tools over stdio (Python MCP SDK v2, `MCPServer`):
@@ -120,6 +136,10 @@ explicit SHA-256 chain verification.
 | `LOCKER_PORT` | `8000` | bind port (`python -m lockerd`) |
 | `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
 | `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` |
+| `PAYMENT_WALLET_ADDRESS` | (unset) | receiving EVM address (required in x402 mode) |
+| `BASE_RPC_URL` | `https://mainnet.base.org` | Base JSON-RPC endpoint |
+| `REQUIRED_USDC_UNITS` | `2000` | minimum payment (USDC units, 6 decimals) |
+| `USDC_CONTRACT` | `0x8335…A02913` | Base native USDC token contract |
 
 Hard limits (memory-safe): 64 KB per block, 256 KB per pad (byte quota), 32
 blocks default (configurable at creation, capped at 4096), 64 KB payload per

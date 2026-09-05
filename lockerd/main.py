@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hmac
 import json
+import logging
 import secrets
 import uuid
 from contextlib import asynccontextmanager
@@ -12,7 +13,9 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from . import config as cfg
-from . import db, hashchain
+from . import db, hashchain, payments
+
+logger = logging.getLogger("lockerd.main")
 
 
 def create_app(config: cfg.Config | None = None) -> FastAPI:
@@ -46,18 +49,6 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 return None
         return body
 
-    async def x402(request: Request) -> JSONResponse:
-        # Drain the body so the request completes cleanly before rejecting.
-        async for _ in request.stream():
-            pass
-        return JSONResponse(
-            status_code=402,
-            content={
-                "error": "payment_required",
-                "detail": "AUTH_MODE=x402 requires payment validation; no provider is wired in v1",
-            },
-        )
-
     def verify_write_key(pad: dict, write_key: str) -> bool:
         return hmac.compare_digest(hashchain.sha256_hex(write_key.encode()), pad["write_key_hash"])
 
@@ -71,8 +62,36 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
 
     @app.post("/v1/pads", status_code=201)
     async def create_pad(request: Request):
+        tx_hash = None
+        payer_address = None
+        amount_units = None
+
         if config.auth_mode == cfg.AUTH_X402:
-            return await x402(request)
+            wallet = config.payment_wallet_address
+            if not wallet:
+                logger.warning("LOCKER_MODE=x402 but PAYMENT_WALLET_ADDRESS is unset")
+                raise HTTPException(500, "payment configuration error")
+            tx_hash = request.headers.get("X-Payment-Proof", "").strip()
+            if not tx_hash:
+                challenge = payments.build_challenge(
+                    wallet, config.usdc_contract, config.required_usdc_units)
+                return JSONResponse(
+                    status_code=402,
+                    content=challenge,
+                    headers={"WWW-Authenticate": payments.www_authenticate_header(
+                        wallet, config.required_usdc_units)},
+                )
+            s = store(request)
+            async with s.lock:
+                if await s.has_receipt(tx_hash):
+                    raise HTTPException(409, "payment already redeemed")
+            try:
+                receipt = await payments.get_transaction_receipt(config.base_rpc_url, tx_hash)
+                payer_address, amount_units = payments.validate_receipt(
+                    receipt, wallet, config.usdc_contract, config.required_usdc_units)
+            except payments.PaymentVerificationError as e:
+                raise HTTPException(402, f"payment verification failed: {e}")
+
         raw = await read_body(request, 4096)
         if raw is None:
             raise HTTPException(413, "request body too large")
@@ -96,7 +115,14 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         read_ticket = secrets.token_urlsafe(32)
         s = store(request)
         async with s.lock:
-            await s.create_pad(pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks)
+            if config.auth_mode == cfg.AUTH_X402:
+                ok = await s.create_pad_with_receipt(
+                    pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks,
+                    tx_hash, amount_units, payer_address)
+                if not ok:
+                    raise HTTPException(409, "payment already redeemed")
+            else:
+                await s.create_pad(pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks)
             await s.create_ticket(read_ticket, pad_id, "read_once", 1)
         return {"pad_id": pad_id, "write_key": write_key, "read_ticket": read_ticket}
 

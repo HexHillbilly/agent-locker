@@ -30,16 +30,34 @@ class LockerError(RuntimeError):
         super().__init__(f"locker daemon error {status_code}: {detail}")
 
 
+class PaymentRequired(LockerError):
+    """HTTP 402 carrying the daemon's structured payment challenge body."""
+    def __init__(self, challenge: dict):
+        super().__init__(402, "payment required")
+        self.challenge = challenge
+
+
 def _err(e: LockerError) -> dict:
     """Daemon errors come back as a structured error dict, not a raised exception."""
+    if isinstance(e, PaymentRequired):
+        return {"error": {"status": 402, "challenge": e.challenge}}
     return {"error": {"status": e.status_code, "detail": str(e)}}
 
 
-def _request(method: str, path: str, token: str | None = None, **kw) -> dict:
+def _request(method: str, path: str, token: str | None = None,
+             payment_tx_hash: str | None = None, **kw) -> dict:
     headers = dict(kw.pop("headers", {}))
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if payment_tx_hash:
+        headers["X-Payment-Proof"] = payment_tx_hash
     r = httpx.request(method, LOCKER_URL + path, headers=headers, timeout=30.0, **kw)
+    if r.status_code == 402:
+        try:
+            challenge = r.json()
+        except Exception:
+            challenge = {"error": "payment_required", "detail": r.text}
+        raise PaymentRequired(challenge)
     if r.status_code >= 400:
         try:
             detail = r.json().get("detail", r.text)
@@ -97,11 +115,14 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
     "Save these — you MUST reuse the returned pad_id and write_key (never invent "
     "your own) for every later append and seal. Must be called ALONE: do NOT batch "
     "it with append/seal in the same step, because pad_id is generated dynamically "
-    "and is only available after this call returns."
+    "and is only available after this call returns. In x402 (pay-per-pad) mode, "
+    "pass payment_tx_hash to prove payment; without it the daemon returns a 402 "
+    "challenge that is surfaced in the error object."
 ))
-def locker_create(ttl_seconds: int, max_blocks: int = 32) -> dict:
+def locker_create(ttl_seconds: int, max_blocks: int = 32,
+                  payment_tx_hash: str | None = None) -> dict:
     try:
-        return _request("POST", "/v1/pads",
+        return _request("POST", "/v1/pads", payment_tx_hash=payment_tx_hash,
                         json={"ttl_seconds": ttl_seconds, "max_blocks": max_blocks})
     except LockerError as e:
         return _err(e)
@@ -151,9 +172,10 @@ def locker_seal(pad_id: str, write_key: str) -> dict:
     "is the list of payload blocks (each a string or dict) to append after the "
     "envelope. Returns pad_id, read_ticket, head_hash, status."
 ))
-def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600) -> dict:
+def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
+                   payment_tx_hash: str | None = None) -> dict:
     try:
-        created = _request("POST", "/v1/pads", json={
+        created = _request("POST", "/v1/pads", payment_tx_hash=payment_tx_hash, json={
             "ttl_seconds": ttl_seconds,
             "max_blocks": max(2, len(artifacts) + 1),
         })

@@ -347,17 +347,4 @@ async def test_hash_chain_detects_tampering(client, tmp_path):
     assert diverged
 
 
-# ---- x402 ----
-
-@pytest.fixture
-async def x402_client(tmp_path):
-    app = create_app(cfg.Config(db_path=str(tmp_path / "x.db"), auth_mode=cfg.AUTH_X402))
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-            yield c
-
-
-async def test_x402_mode_returns_402(x402_client):
-    r = await x402_client.post("/v1/pads", json={"ttl_seconds": 60, "max_blocks": 4})
-    assert r.status_code == 402
+# ---- x402 payment rail: covered comprehensively in tests/test_payments.py ----
