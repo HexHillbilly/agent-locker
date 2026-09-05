@@ -53,8 +53,6 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
     """Walk the full chain genesis -> head.
 
     Returns ``(chain_valid, blocks_verified, blocks, manifest)``.
-    ``blocks_verified`` is the number of consecutive blocks from genesis whose
-    hashes checked out before any break.
     """
     manifest = _request("GET", f"/v1/pads/{pad_id}/manifest")
     block_count = manifest["block_count"]
@@ -94,9 +92,12 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
     return chain_valid, verified, blocks, manifest
 
 
-@server.tool()
+@server.tool(description=(
+    "Create a new locker pad. Returns pad_id, write_key, and read_ticket. "
+    "Save these — you MUST reuse the returned pad_id and write_key (never invent "
+    "your own) for every later append and seal."
+))
 def locker_create(ttl_seconds: int, max_blocks: int = 32) -> dict:
-    """Create a locker pad. Returns pad_id, write_key, read_ticket."""
     try:
         return _request("POST", "/v1/pads",
                         json={"ttl_seconds": ttl_seconds, "max_blocks": max_blocks})
@@ -104,10 +105,17 @@ def locker_create(ttl_seconds: int, max_blocks: int = 32) -> dict:
         return _err(e)
 
 
-@server.tool()
+@server.tool(description=(
+    "Append ONE block to an existing pad (pass the real pad_id and write_key from "
+    "locker_create). The very first append is Block 0 and MUST be a "
+    "locker.handoff.v1 envelope object with exactly these fields: "
+    "schema='locker.handoff.v1', task_id (string), from_agent (string), "
+    "to_agent (string), constraints (list of strings), artifacts (list of objects), "
+    "budget_usd (number or null). Subsequent appends (Block 1+) carry the task "
+    "payload."
+))
 def locker_append(pad_id: str, write_key: str, payload: Any,
                   content_type: str = "application/json") -> dict:
-    """Append a block. Block 0 must be a locker.handoff.v1 envelope dict."""
     if isinstance(payload, (dict, list)):
         data = json.dumps(payload).encode()
     elif isinstance(payload, str):
@@ -121,18 +129,22 @@ def locker_append(pad_id: str, write_key: str, payload: Any,
         return _err(e)
 
 
-@server.tool()
+@server.tool(description=(
+    "Seal the pad to finalize it (pass the pad_id and write_key from locker_create). "
+    "After sealing, further appends are rejected."
+))
 def locker_seal(pad_id: str, write_key: str) -> dict:
-    """Seal a pad: freeze it and revoke write capability."""
     try:
         return _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
     except LockerError as e:
         return _err(e)
 
 
-@server.tool()
+@server.tool(description=(
+    "Read pad metadata: state, block count, total bytes, sealed_at, head hash. "
+    "Pass a read_ticket to also verify the hash chain and receive an integrity block."
+))
 def locker_manifest(pad_id: str, ticket: str | None = None) -> dict:
-    """Read pad metadata. Pass a read ticket to also verify the hash chain."""
     try:
         if ticket:
             chain_valid, verified, _, manifest = _fetch_and_verify_chain(pad_id, ticket)
@@ -145,11 +157,13 @@ def locker_manifest(pad_id: str, ticket: str | None = None) -> dict:
         return _err(e)
 
 
-@server.tool()
+@server.tool(description=(
+    "Read blocks from a pad using the read_ticket. Defaults to Block 0 (the "
+    "envelope). Read Block 0 first, then call again with from_block=1 and a larger "
+    "to_block to get the payload. Every result includes an integrity block."
+))
 def locker_read_blocks(pad_id: str, ticket: str, from_block: int = 0,
                        to_block: int = 0) -> dict:
-    """Read a slice of blocks (defaults to block 0, the envelope) and verify the
-    full hash chain against head_hash under the hood."""
     try:
         chain_valid, verified, blocks, _ = _fetch_and_verify_chain(pad_id, ticket)
         total = len(blocks)

@@ -144,6 +144,8 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 pytest -q                                    # 23 behavioral tests (API + quotas + lease + tamper)
 .venv/bin/python scripts/test_handoff_e2e.py # two-agent handoff over MCP: planner/worker,
                                              # post-seal rejection, lease expiry, tamper
+.venv/bin/python scripts/dogfood_llm.py      # live-LLM dogfood: a real model drives lockermcp as
+                                             # planner + worker (Ollama; --model qwen2.5:14b recommended)
 ```
 
 ## Notes
