@@ -95,7 +95,9 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
 @server.tool(description=(
     "Create a new locker pad. Returns pad_id, write_key, and read_ticket. "
     "Save these — you MUST reuse the returned pad_id and write_key (never invent "
-    "your own) for every later append and seal."
+    "your own) for every later append and seal. Must be called ALONE: do NOT batch "
+    "it with append/seal in the same step, because pad_id is generated dynamically "
+    "and is only available after this call returns."
 ))
 def locker_create(ttl_seconds: int, max_blocks: int = 32) -> dict:
     try:
@@ -136,6 +138,45 @@ def locker_append(pad_id: str, write_key: str, payload: Any,
 def locker_seal(pad_id: str, write_key: str) -> dict:
     try:
         return _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
+    except LockerError as e:
+        return _err(e)
+
+
+@server.tool(description=(
+    "Atomically create a pad, write the envelope (Block 0), write each artifact as "
+    "a block (Block 1+), and seal — all in one call. envelope must be a "
+    "locker.handoff.v1 envelope dict with exactly: schema='locker.handoff.v1', "
+    "task_id (string), from_agent (string), to_agent (string), constraints (list of "
+    "strings), artifacts (list of objects), budget_usd (number or null). artifacts "
+    "is the list of payload blocks (each a string or dict) to append after the "
+    "envelope. Returns pad_id, read_ticket, head_hash, status."
+))
+def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600) -> dict:
+    try:
+        created = _request("POST", "/v1/pads", json={
+            "ttl_seconds": ttl_seconds,
+            "max_blocks": max(2, len(artifacts) + 1),
+        })
+        pad_id = created["pad_id"]
+        write_key = created["write_key"]
+        read_ticket = created["read_ticket"]
+        _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
+                 content=json.dumps(envelope).encode(),
+                 headers={"Content-Type": "application/json"})
+        for artifact in artifacts:
+            if isinstance(artifact, (dict, list)):
+                data = json.dumps(artifact).encode()
+                ct = "application/json"
+            elif isinstance(artifact, str):
+                data = artifact.encode()
+                ct = "text/plain"
+            else:
+                raise ValueError("each artifact must be a string or dict")
+            _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
+                     content=data, headers={"Content-Type": ct})
+        sealed = _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
+        return {"pad_id": pad_id, "read_ticket": read_ticket,
+                "head_hash": sealed["head_hash"], "status": sealed["state"]}
     except LockerError as e:
         return _err(e)
 

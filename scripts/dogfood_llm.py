@@ -177,6 +177,19 @@ PLANNER_USER = (
     "create the pad, write both blocks, and seal it."
 )
 
+DEPOSIT_PLANNER_SYSTEM = (
+    "You are an orchestrator agent with access to lockermcp tools. Use locker_deposit "
+    "to create, write, and seal a pad in ONE atomic call. Then output ONLY the "
+    "pad_id and read_ticket."
+)
+
+DEPOSIT_PLANNER_USER = (
+    "Deposit a handoff. The task: specify a Python utility `topwords.py` that reads "
+    "a text file and prints the 10 most frequent words (case-insensitive), skipping "
+    "common stopwords. Build a valid locker.handoff.v1 envelope and pass the full "
+    "specification as a single string in the artifacts list."
+)
+
 WORKER_SYSTEM = (
     "You are worker-agent with access to lockermcp tools. You are READ-ONLY: you "
     "may ONLY call locker_manifest and locker_read_blocks — NEVER locker_create, "
@@ -209,6 +222,8 @@ async def main() -> None:
     ap.add_argument("--model", default="llama3.1:8b")
     ap.add_argument("--ollama-url", default="http://localhost:11434")
     ap.add_argument("--locker-url", default="http://127.0.0.1:8000")
+    ap.add_argument("--deposit", action="store_true",
+                    help="planner uses the atomic locker_deposit tool instead of granular steps")
     ap.add_argument("--temperature", type=float, default=0.2)
     args = ap.parse_args()
 
@@ -217,26 +232,28 @@ async def main() -> None:
 
     # --- Session 1: Planner ---
     print("\n--- Session 1: Planner ---")
-    final, log, tools = await run_session(args.locker_url, llm, PLANNER_SYSTEM,
-                                          PLANNER_USER, "planner")
+    psys, puser = (DEPOSIT_PLANNER_SYSTEM, DEPOSIT_PLANNER_USER) if args.deposit \
+        else (PLANNER_SYSTEM, PLANNER_USER)
+    final, log, tools = await run_session(args.locker_url, llm, psys, puser, "planner")
     print(f"tools available: {tools}")
     for t in log:
         print(f"  [{t['status']}] {t['name']}({json.dumps(t['args'])}) "
               f"-> {summarize_result(t['result'])}")
     print(f"planner final text: {final[:500]!r}")
 
-    # map pad_id -> read_ticket from every successful create, and find the sealed pad
+    # map pad_id -> read_ticket from create/deposit results; find the sealed pad
     tickets = {}
-    for t in log:
-        if (t["name"] == "locker_create" and t["status"] == "ok"
-                and isinstance(t["result"], dict) and "pad_id" in t["result"]):
-            tickets[t["result"]["pad_id"]] = t["result"]["read_ticket"]
     sealed_pad = None
     for t in log:
-        if (t["name"] == "locker_seal" and t["status"] == "ok"
-                and isinstance(t["result"], dict) and "error" not in t["result"]):
-            sealed_pad = t["args"].get("pad_id")
-            break
+        r = t["result"]
+        if t["status"] != "ok" or not isinstance(r, dict):
+            continue
+        if "pad_id" in r and "read_ticket" in r:
+            tickets[r["pad_id"]] = r["read_ticket"]
+            if r.get("status") == "sealed" and sealed_pad is None:
+                sealed_pad = r["pad_id"]
+        if t["name"] == "locker_seal" and "error" not in r:
+            sealed_pad = t["args"].get("pad_id") or sealed_pad
     if sealed_pad and sealed_pad in tickets:
         pad_id, read_ticket = sealed_pad, tickets[sealed_pad]
     elif tickets:

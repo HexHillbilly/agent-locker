@@ -77,8 +77,9 @@ self-contained.
 
 ## MCP server (`lockermcp`)
 
-Five tools over stdio (Python MCP SDK v2, `MCPServer`):
+Six tools over stdio (Python MCP SDK v2, `MCPServer`):
 
+- `locker_deposit(envelope, artifacts, ttl_seconds=3600)` → `{pad_id, read_ticket, head_hash, status}` — atomic create + append envelope + append artifacts + seal in one call (recommended for one-shot handoffs; avoids multi-step batching hazards)
 - `locker_create(ttl_seconds, max_blocks=32)` → `{pad_id, write_key, read_ticket}`
 - `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}`
 - `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}`
