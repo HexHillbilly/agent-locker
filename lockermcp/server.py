@@ -30,6 +30,11 @@ class LockerError(RuntimeError):
         super().__init__(f"locker daemon error {status_code}: {detail}")
 
 
+def _err(e: LockerError) -> dict:
+    """Daemon errors come back as a structured error dict, not a raised exception."""
+    return {"error": {"status": e.status_code, "detail": str(e)}}
+
+
 def _request(method: str, path: str, token: str | None = None, **kw) -> dict:
     headers = dict(kw.pop("headers", {}))
     if token:
@@ -92,8 +97,11 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
 @server.tool()
 def locker_create(ttl_seconds: int, max_blocks: int = 32) -> dict:
     """Create a locker pad. Returns pad_id, write_key, read_ticket."""
-    return _request("POST", "/v1/pads",
-                    json={"ttl_seconds": ttl_seconds, "max_blocks": max_blocks})
+    try:
+        return _request("POST", "/v1/pads",
+                        json={"ttl_seconds": ttl_seconds, "max_blocks": max_blocks})
+    except LockerError as e:
+        return _err(e)
 
 
 @server.tool()
@@ -106,26 +114,35 @@ def locker_append(pad_id: str, write_key: str, payload: Any,
         data = payload.encode()
     else:
         raise ValueError("payload must be a string, dict, or list")
-    return _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
-                    content=data, headers={"Content-Type": content_type})
+    try:
+        return _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
+                        content=data, headers={"Content-Type": content_type})
+    except LockerError as e:
+        return _err(e)
 
 
 @server.tool()
 def locker_seal(pad_id: str, write_key: str) -> dict:
     """Seal a pad: freeze it and revoke write capability."""
-    return _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
+    try:
+        return _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
+    except LockerError as e:
+        return _err(e)
 
 
 @server.tool()
 def locker_manifest(pad_id: str, ticket: str | None = None) -> dict:
     """Read pad metadata. Pass a read ticket to also verify the hash chain."""
-    if ticket:
-        chain_valid, verified, _, manifest = _fetch_and_verify_chain(pad_id, ticket)
-        integrity = {"chain_valid": chain_valid, "blocks_verified": verified}
-    else:
-        manifest = _request("GET", f"/v1/pads/{pad_id}/manifest")
-        integrity = {"chain_valid": None, "blocks_verified": 0}
-    return {**manifest, "integrity": integrity}
+    try:
+        if ticket:
+            chain_valid, verified, _, manifest = _fetch_and_verify_chain(pad_id, ticket)
+            integrity = {"chain_valid": chain_valid, "blocks_verified": verified}
+        else:
+            manifest = _request("GET", f"/v1/pads/{pad_id}/manifest")
+            integrity = {"chain_valid": None, "blocks_verified": 0}
+        return {**manifest, "integrity": integrity}
+    except LockerError as e:
+        return _err(e)
 
 
 @server.tool()
@@ -133,23 +150,26 @@ def locker_read_blocks(pad_id: str, ticket: str, from_block: int = 0,
                        to_block: int = 0) -> dict:
     """Read a slice of blocks (defaults to block 0, the envelope) and verify the
     full hash chain against head_hash under the hood."""
-    chain_valid, verified, blocks, _ = _fetch_and_verify_chain(pad_id, ticket)
-    total = len(blocks)
-    if total == 0:
-        slice_, to = [], 0
-    else:
-        f = max(0, from_block)
-        to = min(to_block, total - 1)
-        slice_ = blocks[f:to + 1] if f <= to else []
-    return {
-        "pad_id": pad_id,
-        "from": from_block,
-        "to": to,
-        "count": len(slice_),
-        "total_blocks": total,
-        "integrity": {"chain_valid": chain_valid, "blocks_verified": verified},
-        "blocks": slice_,
-    }
+    try:
+        chain_valid, verified, blocks, _ = _fetch_and_verify_chain(pad_id, ticket)
+        total = len(blocks)
+        if total == 0:
+            slice_, to = [], 0
+        else:
+            f = max(0, from_block)
+            to = min(to_block, total - 1)
+            slice_ = blocks[f:to + 1] if f <= to else []
+        return {
+            "pad_id": pad_id,
+            "from": from_block,
+            "to": to,
+            "count": len(slice_),
+            "total_blocks": total,
+            "integrity": {"chain_valid": chain_valid, "blocks_verified": verified},
+            "blocks": slice_,
+        }
+    except LockerError as e:
+        return _err(e)
 
 
 def main() -> None:

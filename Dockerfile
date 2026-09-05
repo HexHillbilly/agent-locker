@@ -16,8 +16,8 @@ RUN mkdir -p /data && chown -R locker:locker /data /app
 
 USER locker
 
-ENV LOCKER_DB=/data/locker.db \
-    AUTH_MODE=local \
+ENV LOCKER_DB_PATH=/data/locker.db \
+    LOCKER_MODE=local \
     LOCKER_HOST=0.0.0.0 \
     LOCKER_PORT=8000
 

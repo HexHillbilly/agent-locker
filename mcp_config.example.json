@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lockermcp": {
+      "command": "python",
+      "args": ["-m", "lockermcp"],
+      "env": {
+        "LOCKER_URL": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}

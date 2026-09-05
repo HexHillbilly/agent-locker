@@ -6,8 +6,8 @@ services:
     volumes:
       - locker-data:/data
     environment:
-      LOCKER_DB: /data/locker.db
-      AUTH_MODE: local
+      LOCKER_DB_PATH: /data/locker.db
+      LOCKER_MODE: local
     restart: unless-stopped
 
 volumes:

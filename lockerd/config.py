@@ -28,7 +28,7 @@ class Config:
     @classmethod
     def from_env(cls) -> "Config":
         return cls(
-            db_path=os.environ.get("LOCKER_DB", "locker.db"),
-            auth_mode=os.environ.get("AUTH_MODE", AUTH_LOCAL),
+            db_path=os.environ.get("LOCKER_DB_PATH", "locker.db"),
+            auth_mode=os.environ.get("LOCKER_MODE", AUTH_LOCAL),
             read_lease_seconds=int(os.environ.get("LOCKER_READ_LEASE_SECONDS", READ_LEASE_SECONDS)),
         )

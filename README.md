@@ -14,9 +14,11 @@ no external services.
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-LOCKER_DB=locker.db AUTH_MODE=local python -m lockerd        # the daemon (HTTP)
-LOCKER_URL=http://127.0.0.1:8000 python -m lockermcp         # the MCP server (stdio)
+LOCKER_DB_PATH=locker.db LOCKER_MODE=local python -m lockerd   # the daemon (HTTP)
+LOCKER_URL=http://127.0.0.1:8000 python -m lockermcp          # the MCP server (stdio)
 ```
+
+See `.env.example` for every runtime variable.
 
 ## API
 
@@ -94,19 +96,25 @@ computes SHA-256 itself:
 {"integrity": {"chain_valid": true, "blocks_verified": 2}}
 ```
 
-Two-agent smoke test (starts its own daemon, and checks that a tampered pad
-fails verification):
+Register with Claude Code / Cursor / Open WebUI via `mcp_config.example.json`
+(stdio `mcpServers` block).
+
+## Operations
 
 ```bash
-.venv/bin/python scripts/mcp_smoke.py
+# Inspect a pad and verify its chain (stdlib only, no deps)
+python scripts/inspect_pad.py <pad_id> --ticket <read_ticket> [--url http://127.0.0.1:8000]
 ```
+
+Prints pad state, block count, total bytes, sealed status, head hash, and an
+explicit SHA-256 chain verification.
 
 ## Configuration
 
 | Env var | Default | Meaning |
 |---------|---------|---------|
-| `LOCKER_DB` | `locker.db` | SQLite file path |
-| `AUTH_MODE` | `local` | `local` (ticket bypass) or `x402` (payment) |
+| `LOCKER_MODE` | `local` | `local` (ticket bypass) or `x402` (payment) |
+| `LOCKER_DB_PATH` | `locker.db` | SQLite file path |
 | `LOCKER_HOST` | `127.0.0.1` | bind host (`python -m lockerd`) |
 | `LOCKER_PORT` | `8000` | bind port (`python -m lockerd`) |
 | `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
@@ -127,17 +135,20 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
   compile on musl), runs as a non-root `locker` user.
 - SQLite lives at `/data/locker.db` on a named volume (`locker-data`) with WAL
   mode enabled; the `-wal`/`-shm` sidecars sit in the same volume.
+- `deploy/Caddyfile`: reverse proxy in front of the daemon with a 128 KB
+  `request_body` cap and sane connection timeouts.
 
 ## Testing
 
 ```bash
-pytest -q                          # 23 behavioral tests (API + quotas + lease + tamper)
-.venv/bin/python scripts/mcp_smoke.py   # two-agent MCP handoff, end-to-end
+pytest -q                                    # 23 behavioral tests (API + quotas + lease + tamper)
+.venv/bin/python scripts/test_handoff_e2e.py # two-agent handoff over MCP: planner/worker,
+                                             # post-seal rejection, lease expiry, tamper
 ```
 
 ## Notes
 
-- `AUTH_MODE=x402` returns HTTP 402 with a clear error and one obvious extension
+- `LOCKER_MODE=x402` returns HTTP 402 with a clear error and one obvious extension
   point; no payment provider is wired yet.
-- The DB schema gained a `tickets.lease_started_at` column; the DB file is
+- The DB schema carries a `tickets.lease_started_at` column; the DB file is
   gitignored/regenerable, so delete an old one rather than migrating.

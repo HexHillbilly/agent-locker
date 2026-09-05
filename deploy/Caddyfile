@@ -1,0 +1,21 @@
+# Agent Locker daemon reverse proxy.
+#
+# Fronts the daemon (http://localhost:8000), enforces a 128 KB request-body cap,
+# and sets sane connection timeouts. Swap `:8001` for a hostname (e.g.
+# locker.lucky.lan) if you terminate TLS / route by name.
+
+:8001 {
+	# Coarse outer upload cap. The daemon itself rejects any single block
+	# over 64 KB; 128 KB here is a generous envelope-sized bound.
+	request_body {
+		max_size 128KB
+	}
+
+	reverse_proxy localhost:8000 {
+		transport http {
+			dial_timeout 5s
+			read_timeout 30s
+			write_timeout 30s
+		}
+	}
+}
