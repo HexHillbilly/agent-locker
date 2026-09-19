@@ -24,6 +24,8 @@ from .models import (
     PadCreateRequest,
     PadCreatedResponse,
     SealResponse,
+    TicketMintRequest,
+    TicketMintResponse,
 )
 
 logger = logging.getLogger("lockerd.main")
@@ -306,6 +308,32 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             pad = await s.get_pad(pad_id)
         return {"pad_id": pad_id, "state": pad["state"],
                 "sealed_at": pad["sealed_at"], "head_hash": pad["head_hash"]}
+
+    @app.post("/v1/pads/{pad_id}/tickets", status_code=201,
+              response_model=TicketMintResponse,
+              responses=_err(401, 404, 422))
+    async def mint_ticket(pad_id: str, request: Request, body: TicketMintRequest,
+                          auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+        """Mint an additional read ticket (e.g. a durable read_unlimited audit ticket).
+
+        ``read_once`` tickets carry a 10-minute lease; ``read_unlimited`` tickets
+        never expire, so a reviewer can audit a SEALED pad at any later time.
+        """
+        ttype = body.type
+        if ttype not in ("read_once", "read_unlimited"):
+            raise api_error(422, "unprocessable",
+                            f"type must be 'read_once' or 'read_unlimited', got {ttype!r}")
+        write_key = auth.credentials if auth else None
+        s = store(request)
+        async with s.lock:
+            pad = await s.get_pad(pad_id)
+            if pad is None:
+                raise api_error(404, "not_found", "pad not found")
+            if not write_key or not verify_write_key(pad, write_key):
+                raise api_error(401, "unauthorized", "invalid write key")
+            ticket = secrets.token_urlsafe(32)
+            await s.create_ticket(ticket, pad_id, ttype)
+        return {"pad_id": pad_id, "ticket": ticket, "type": ttype}
 
     @app.get("/v1/pads/{pad_id}/manifest", response_model=ManifestResponse,
              responses=_err(404))

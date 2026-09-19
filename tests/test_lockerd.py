@@ -348,3 +348,72 @@ async def test_hash_chain_detects_tampering(client, tmp_path):
 
 
 # ---- x402 payment rail: covered comprehensively in tests/test_payments.py ----
+
+
+# ---- ticket minting (read_unlimited audit tickets) ----
+
+async def test_mint_read_unlimited_ticket(client):
+    d = await create_pad(client)
+    r = await client.post(
+        f"/v1/pads/{d['pad_id']}/tickets",
+        json={"type": "read_unlimited"},
+        headers={"Authorization": f"Bearer {d['write_key']}"},
+    )
+    assert r.status_code == 201, r.text
+    ticket = r.json()
+    assert ticket["pad_id"] == d["pad_id"]
+    assert ticket["type"] == "read_unlimited"
+    assert ticket["ticket"] and ticket["ticket"] != d["read_ticket"]
+    # the minted ticket reads blocks
+    r2 = await client.get(f"/v1/pads/{d['pad_id']}/blocks", params={"ticket": ticket["ticket"]})
+    assert r2.status_code == 200
+
+
+async def test_mint_read_once_ticket(client):
+    d = await create_pad(client)
+    r = await client.post(
+        f"/v1/pads/{d['pad_id']}/tickets",
+        json={"type": "read_once"},
+        headers={"Authorization": f"Bearer {d['write_key']}"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["type"] == "read_once"
+
+
+async def test_mint_ticket_requires_write_key(client):
+    d = await create_pad(client)
+    r = await client.post(f"/v1/pads/{d['pad_id']}/tickets", json={"type": "read_unlimited"})
+    assert r.status_code == 401
+    r = await client.post(
+        f"/v1/pads/{d['pad_id']}/tickets",
+        json={"type": "read_unlimited"},
+        headers={"Authorization": "Bearer wrong-key"},
+    )
+    assert r.status_code == 401
+
+
+async def test_mint_ticket_rejects_bad_type(client):
+    d = await create_pad(client)
+    r = await client.post(
+        f"/v1/pads/{d['pad_id']}/tickets",
+        json={"type": "bogus"},
+        headers={"Authorization": f"Bearer {d['write_key']}"},
+    )
+    assert r.status_code == 422
+
+
+# ---- block 0 allowed_paths (optional, type-checked) ----
+
+async def test_allowed_paths_optional_and_typechecked(client):
+    d = await create_pad(client)
+    assert (await append(client, d["pad_id"], d["write_key"],
+                         envelope(allowed_paths=["src/*", "tests/*"]))).status_code == 201
+    d2 = await create_pad(client)
+    assert (await append(client, d2["pad_id"], d2["write_key"],
+                         envelope(allowed_paths=None))).status_code == 201
+    d3 = await create_pad(client)
+    assert (await append(client, d3["pad_id"], d3["write_key"],
+                         envelope(allowed_paths="src/*"))).status_code == 400
+    d4 = await create_pad(client)
+    assert (await append(client, d4["pad_id"], d4["write_key"],
+                         envelope(allowed_paths=[1, 2]))).status_code == 400

@@ -49,6 +49,16 @@ class SealResponse(BaseModel):
     head_hash: str
 
 
+class TicketMintRequest(BaseModel):
+    type: str = "read_unlimited"
+
+
+class TicketMintResponse(BaseModel):
+    pad_id: str
+    ticket: str
+    type: str
+
+
 class BlockResponse(BaseModel):
     seq: int
     prev_hash: str

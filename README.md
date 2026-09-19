@@ -27,6 +27,7 @@ See `.env.example` for every runtime variable.
 | POST   | `/v1/pads` | — | create a pad → `{pad_id, write_key, read_ticket}` |
 | POST   | `/v1/pads/{id}/append` | `Bearer <write_key>` | append one block (≤64 KB) |
 | POST   | `/v1/pads/{id}/seal` | `Bearer <write_key>` | freeze the pad, revoke writes |
+| POST   | `/v1/pads/{id}/tickets` | `Bearer <write_key>` | mint a read ticket (`read_once` / `read_unlimited`) |
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
 | GET    | `/v1/pads/{id}/blocks` | `?ticket=<read_ticket>` | bounded slice of blocks |
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
@@ -51,6 +52,36 @@ field is present and correctly typed:
   "budget_usd": 1.25          // float, or null
 }
 ```
+
+Optional field: `allowed_paths` — a list of glob/path patterns (list[str]) or
+`null`. When present, a reviewer may flag any changed file outside the patterns
+as a scope violation. Absent or `null` = unconstrained (backward compatible).
+
+## Block 1 attestation (implementation envelope)
+
+Block 1 is free-form JSON — the daemon does not schema-validate post-block-0
+payloads — but the recommended attestation shape is:
+
+```json
+{
+  "task_id": "str",
+  "from_agent": "str",
+  "to_agent": "str",
+  "status": "completed | failed | failed_dirty",
+  "canonical_ref": {"repo": "owner/name", "branch": "str", "commit_sha": "str"},
+  "verification": {"test_command": "str", "exit_code": 0, "tests_passed": 1, "tests_failed": 0},
+  "environment": {
+    "runtime": "python 3.11.8",
+    "dependency_manifest": "requirements.txt",
+    "dependency_hash": "sha256:..."
+  },
+  "artifacts": [{"type": "git_commit", "ref": "..."}, {"type": "diff_summary", "files_changed": [], "loc_added": 0, "loc_deleted": 0}]
+}
+```
+
+`environment.dependency_hash` pegs the attestation to an exact dependency
+snapshot, so an independent re-run reproduces the same result instead of
+whatever upstream packages install today.
 
 ## Hash chain & tamper-evidence
 

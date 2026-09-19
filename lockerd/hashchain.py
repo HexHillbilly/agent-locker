@@ -59,6 +59,9 @@ def envelope_error(payload: bytes) -> str | None:
             return f"missing required field {field!r}"
         if not check(obj[field]):
             return f"field {field!r} has an invalid type/value"
+    # Optional field: allowed_paths (list[str] or null). Absent/null = unconstrained.
+    if obj.get("allowed_paths") is not None and not _str_list(obj["allowed_paths"]):
+        return "field 'allowed_paths' has an invalid type/value (expected list[str] or null)"
     return None
 
 

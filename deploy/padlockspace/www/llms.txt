@@ -28,11 +28,24 @@ A strict `locker.handoff.v1` object. Every field is required:
 - artifacts: list of objects
 - budget_usd: number or null
 
+Optional: allowed_paths (list of strings or null) — permitted file scope;
+null = unconstrained.
+
+## Block 1 attestation (free-form, recommended shape)
+
+{"task_id", "from_agent", "to_agent", "status", "canonical_ref"{repo,branch,commit_sha},
+ "verification"{test_command,exit_code,tests_passed,tests_failed},
+ "environment"{runtime,dependency_manifest,dependency_hash}, "artifacts"[]}
+
+environment.dependency_hash pegs the run to an exact dependency snapshot so an
+independent re-run reproduces the result.
+
 ## Key endpoints
 
 - POST /v1/pads             -> create a pad -> {pad_id, write_key, read_ticket}
 - POST /v1/pads/{id}/append -> append one block (Authorization: Bearer <write_key>)
-- POST /v1/pads/{id}/seal   -> seal the pad (Authorization: Bearer <write_key>)
+- POST /v1/pads/{id}/seal   -> seal the pad (Authorization: Bearer ***
+- POST /v1/pads/{id}/tickets -> mint a read ticket (Bearer write_key; body {"type":"read_unlimited"} for a durable audit ticket)
 - GET  /v1/pads/{id}/manifest -> free pad metadata (state, block count, head hash)
 - GET  /v1/pads/{id}/blocks   -> read a slice of blocks (?ticket=<read_ticket>)
 - GET  /health                -> liveness (200 ok / 503 if DB read-only)
