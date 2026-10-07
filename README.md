@@ -8,17 +8,63 @@ server (`lockermcp`) so AI agents can drive it natively.
 Python / FastAPI + aiosqlite (single-file SQLite, WAL mode). No Redis, no S3,
 no external services.
 
-## Quick start
+## Install
+
+**Intended published path — pending publication.** The package is intended to be
+run straight from PyPI with `uvx`:
+
+```bash
+uvx lockermcp                      # MCP server (stdio)
+uvx --from lockermcp lockerd       # daemon
+```
+
+`lockermcp` is **not yet published to PyPI**, so `uvx lockermcp` does not resolve
+today. This is the intended install path once publication completes; nothing
+else in this document depends on it.
+
+**Working install path today.** Install from a source checkout into a virtual
+environment:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install .                # or: pip install -e ".[dev]" for development
+```
 
-LOCKER_DB_PATH=locker.db LOCKER_MODE=open python -m lockerd   # the daemon (HTTP)
-LOCKER_URL=http://127.0.0.1:8000 python -m lockermcp          # the MCP server (stdio)
+This installs both console entry points — `lockerd` (the daemon) and `lockermcp`
+(the MCP server) — and the same two commands are what `uvx` will provide later.
+
+## Run the daemon
+
+```bash
+LOCKER_DB_PATH=locker.db LOCKER_MODE=open lockerd     # binds 127.0.0.1:8000
 ```
 
 See `.env.example` for every runtime variable.
+
+## Configure an MCP client
+
+`lockermcp` is a thin client: it talks to a running daemon and its only required
+configuration is `LOCKER_URL`, the daemon's base URL.
+
+```json
+{
+  "mcpServers": {
+    "lockermcp": {
+      "command": "uvx",
+      "args": ["lockermcp"],
+      "env": { "LOCKER_URL": "http://127.0.0.1:8000" }
+    }
+  }
+}
+```
+
+`mcp_config.example.json` in this repository is that block verbatim. Register it
+with Claude Code / Cursor / Open WebUI via the stdio `mcpServers` block. Until
+publication, substitute the locally installed entry point for the `uvx` form:
+
+```json
+{ "command": "lockermcp", "args": [], "env": { "LOCKER_URL": "http://127.0.0.1:8000" } }
+```
 
 ## API
 
@@ -27,7 +73,7 @@ See `.env.example` for every runtime variable.
 | POST   | `/v1/pads` | — | create a pad → `{pad_id, write_key, read_ticket}` |
 | POST   | `/v1/pads/{id}/append` | `Bearer <write_key>` | append one block (≤64 KB) |
 | POST   | `/v1/pads/{id}/seal` | `Bearer <write_key>` | freeze the pad, revoke writes |
-| POST   | `/v1/pads/{id}/tickets` | `Bearer <write_key>` | mint a read ticket (`read_once` / `read_unlimited`) |
+| POST   | `/v1/pads/{id}/tickets` | `Bearer <write_key>` | mint an extra read ticket (`read_once` / `read_unlimited`) |
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
 | GET    | `/v1/pads/{id}/blocks` | `?ticket=<read_ticket>` | bounded slice of blocks |
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
@@ -98,13 +144,29 @@ the chain. The `/blocks` response includes `prev_hash`, `curr_hash`, and the
 base64 payload (`payload_utf8` when text-decodable), so verification is
 self-contained.
 
-## Threat model
+## Integrity guarantees and their limits
 
-Tamper-evident client validation: SHA-256 chain is verified programmatically
-by the client library prior to feeding blocks into LLM context, preventing
-context drift and transport manipulation. It does not replace decentralized
-consensus against a malicious VPS operator. Block 0 `locker.handoff.v1` schema
-validation is enforced client-side via `lockermcp`.
+What the chain establishes:
+
+- **Internal consistency.** Each block's hash is bound to its predecessor, so a
+  single mutated payload breaks verification. The tamper-evidence is checked
+  programmatically by the client before blocks enter LLM context, which prevents
+  context drift and transport manipulation.
+- **Change detection against a trusted head.** If a reader retains a pad's
+  `head_hash` independently, it can detect any later rewrite of the pad.
+
+What the chain does **not** establish:
+
+- It does **not authenticate the writer.** `from_agent` / `to_agent` are
+  client-supplied strings; holding the write key proves possession of the write
+  key, not identity.
+- It does **not** make the attestation true. Block 1 is free-form and
+  unvalidated: `verification.exit_code`, `tests_passed`, and
+  `canonical_ref.commit_sha` are claims the writer makes about itself.
+- It does **not** defend against a malicious operator. Whoever runs the daemon
+  can rewrite both the chain and the head it serves; self-verification against a
+  head obtained from the same server proves nothing new. It is not a substitute
+  for decentralized consensus against a hostile host.
 
 ## Auth & tickets
 
@@ -115,8 +177,11 @@ validation is enforced client-side via `lockermcp`.
   window are unlimited; after it, the ticket returns 403. This lets a reader
   grab block 0 (the envelope) first and then the remaining blocks without
   burning the ticket.
-- **read_unlimited** — supported in the schema, but v1 has no endpoint to mint
-  extra tickets (future work). Tickets are scoped to their pad.
+- **read_unlimited** — minted via `POST /v1/pads/{id}/tickets` with the write
+  key (`{"type": "read_unlimited"}`); it carries no lease window, so a reviewer
+  can re-read a sealed pad after the pad's TTL or after a `read_once` lease has
+  lapsed. `{"type": "read_once"}` mints another leased ticket. Tickets are
+  scoped to their pad.
 - `manifest` is free (public metadata) and does not touch the lease.
 
 ## Payments (txid)
@@ -134,6 +199,9 @@ to require proof of payment on `POST /v1/pads`.
   append-only `payment_receipts` table (`tx_hash` is the primary key → replay-proof).
 - `lockermcp` `locker_create` / `locker_deposit` accept an optional `payment_tx_hash`
   and surface the structured 402 challenge in their error object.
+
+The rail is off by default; the payment tests run against mocks, and the
+on-chain path has not been exercised against a live payment.
 
 ## MCP server (`lockermcp`)
 
@@ -157,8 +225,8 @@ computes SHA-256 itself:
 {"integrity": {"chain_valid": true, "blocks_verified": 2}}
 ```
 
-Register with Claude Code / Cursor / Open WebUI via `mcp_config.example.json`
-(stdio `mcpServers` block).
+`chain_valid` reports internal consistency only; see *Integrity guarantees and
+their limits* above for what it does not prove.
 
 ## Operations
 
@@ -173,16 +241,34 @@ python demo_handoff.py [http://127.0.0.1:8000]
 Prints pad state, block count, total bytes, sealed status, head hash, and an
 explicit SHA-256 chain verification.
 
+## Release artifacts
+
+`scripts/release_build.py` produces release artifacts from an explicit commit:
+
+```bash
+python scripts/release_build.py <commit-ish> [--out /path/outside/repo]
+```
+
+It resolves the commit to its full object ID, exports that committed source into
+a fresh directory (`git archive`, so dev environments, caches, databases and
+stale packaging output are excluded by construction), records a manifest of the
+exported files with sizes and SHA-256 hashes, builds sdist + wheel in an isolated
+environment, and writes `PROVENANCE.json` with the source commit, the manifest
+hash (the manifest does not list itself), the build-tool versions, and the
+artifact hashes. All output lands outside the source tree. Artifact hashes are
+recorded for comparison; builds are **not** claimed to be byte-for-byte
+reproducible.
+
 ## Configuration
 
 | Env var | Default | Meaning |
 |---------|---------|---------|
 | `LOCKER_MODE` | `open` | `open` (no payment; aliases `local`/`dev`) or `txid` (Base USDC receipt check; alias `x402`) |
 | `LOCKER_DB_PATH` | `locker.db` | SQLite file path |
-| `LOCKER_HOST` | `127.0.0.1` | bind host (`python -m lockerd`) |
-| `LOCKER_PORT` | `8000` | bind port (`python -m lockerd`) |
+| `LOCKER_HOST` | `127.0.0.1` | bind host (`lockerd`) |
+| `LOCKER_PORT` | `8000` | bind port (`lockerd`) |
 | `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
-| `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` |
+| `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` (**required** for the MCP server) |
 | `PAYMENT_WALLET_ADDRESS` | (unset) | receiving EVM address (required in txid mode) |
 | `BASE_RPC_URL` | `https://mainnet.base.org` | Base JSON-RPC endpoint |
 | `REQUIRED_USDC_UNITS` | `2000` | minimum payment (USDC units, 6 decimals) |
@@ -209,12 +295,21 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 ## Testing
 
 ```bash
-pytest -q                                    # 42 tests (API + quotas + lease + tamper + payments + hardening)
+pytest -q                                    # full suite: API + quotas + lease + tamper + payments + hardening
 .venv/bin/python scripts/test_handoff_e2e.py # two-agent handoff over MCP: planner/worker,
                                              # post-seal rejection, lease expiry, tamper
 .venv/bin/python scripts/dogfood_llm.py      # live-LLM dogfood: a real model drives lockermcp as
                                              # planner + worker (Ollama; --model qwen2.5:14b recommended)
 ```
+
+## License
+
+agent-locker is dual-licensed. The source is available under the **GNU Affero
+General Public License, version 3 or (at your option) any later version**
+(AGPL-3.0-or-later) — see [LICENSE](LICENSE) — matching the license declared in
+`pyproject.toml`. For proprietary or hosted use where AGPL obligations do not
+fit, a separate commercial license is available from the project owner.
+**Commercial licenses are available on request.**
 
 ## Notes
 
@@ -222,3 +317,5 @@ pytest -q                                    # 42 tests (API + quotas + lease + 
   and returns HTTP 402 with a challenge when no proof is presented.
 - The DB schema carries a `tickets.lease_started_at` column; the DB file is
   gitignored/regenerable, so delete an old one rather than migrating.
+- Deployment observations (what revision a given host is serving) are recorded in
+  [RELEASE_NOTES.md](RELEASE_NOTES.md), not here, because they go stale.

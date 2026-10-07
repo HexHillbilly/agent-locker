@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "lockermcp": {
-      "command": "python",
-      "args": ["-m", "lockermcp"],
+      "command": "uvx",
+      "args": ["lockermcp"],
       "env": {
         "LOCKER_URL": "http://127.0.0.1:8000"
       }
