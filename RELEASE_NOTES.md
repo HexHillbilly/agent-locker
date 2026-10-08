@@ -5,6 +5,55 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
+## 0.1.2rc1 — release candidate, unreleased
+
+Changes since `0.1.1`. **Pre-release candidate: not tagged, not published, not
+deployed.** Retention and ticket-lifecycle policy (Phase 4) is deliberately **not**
+included; that work waits on operator decisions.
+
+- **Trusted-head verification.** `locker_read_blocks` and `locker_manifest` accept
+  an optional `expected_head_hash` — a 64-character lowercase hex sha256 digest the
+  caller obtained from the writer over a separately trusted channel, normally the
+  `head_hash` returned by `locker_seal` or `locker_deposit`. The client recomputes
+  the head from the chain it fetched and compares. This is the only check that
+  detects a chain rewritten **and** rehashed so that it verifies against itself;
+  internal consistency alone cannot. The daemon's own manifest head is never
+  substituted for the caller's reference.
+- **A verdict instead of a boolean.** Reads return `integrity.verdict` —
+  `trusted_head_match`, `internal_consistency_only`, `not_checked` or `failed` —
+  plus an additive `integrity.expected_head` block (`supplied`, `checked`,
+  `matches`, `expected`, `observed`, `detail`). A malformed or mismatching head
+  **fails verification and returns no payloads** (`error.kind ==
+  "verification_failed"`).
+- **Returned text is derived from the verified bytes.** The daemon supplies
+  `payload_utf8` as a parallel derivation; the client previously returned it
+  unverified, so a host could serve bytes that hash correctly alongside different
+  text. The client now recomputes the text from the payload bytes it verified
+  (strict UTF-8, else `null`) and **fails closed** if the daemon's claim disagrees
+  (`cause: representation_mismatch`). Blocks gain
+  `payload_utf8_source: "client-derived"`; `payload_b64` is preserved exactly.
+- **Incomplete or inconsistent retrieval fails closed.** A short page, an unusable
+  `block_count`, a `total_blocks` that disagrees with the manifest or changes
+  between pages, a `seq` that is not the block's position, a foreign `pad_id` echo,
+  or an undecodable payload now produce an error with no payloads (`cause:
+  incomplete_retrieval` / `inconsistent_blocks`) instead of a verified read. The
+  pre-existing hash-chain-break path (`chain_valid: false`, blocks returned, no
+  expected head) is unchanged.
+- **Unknown `LOCKER_MODE` stops the daemon.** An explicitly supplied but
+  unrecognised value raises `ConfigError` at startup instead of silently falling
+  back to `open`, which would have disabled payment enforcement without a word.
+  Unset or empty still means the documented default.
+- **Read tickets travel in the `Authorization` header.** The MCP client sends
+  `Authorization: Bearer <ticket>` rather than a `?ticket=` query parameter, so
+  tickets stay out of URLs and logs. `LOCKER_TICKET_TRANSPORT=query` remains an
+  explicit opt-in and the daemon still accepts both. `scripts/inspect_pad.py` moved
+  to the header as well.
+- **Payloads are framed as untrusted.** Tool descriptions, server instructions and
+  every returned integrity block state that payloads are data, not instructions,
+  and that chain consistency establishes neither authorship nor truth.
+- **No hash-format change.** `curr_hash = sha256(prev_hash ++ payload_bytes)` is
+  untouched in this release, and the hash functions are not modified.
+
 ## 0.1.1 (2026-10-07)
 
 Changes since `0.1.0`:

@@ -48,7 +48,7 @@ lockermcp          # MCP server (stdio)
 ### B. From the source distribution
 
 ```bash
-tar xzf lockermcp-0.1.1.tar.gz && cd lockermcp-0.1.1
+tar xzf lockermcp-0.1.2rc1.tar.gz && cd lockermcp-0.1.2rc1
 python -m venv .venv && source .venv/bin/activate
 pip install .
 ```

@@ -62,7 +62,7 @@ def ticket_transport() -> str:
 
 server = MCPServer(
     "lockermcp",
-    version="0.1.1",
+    version="0.1.2rc1",
     instructions=(
         "Append-only, tamper-evident agent-to-agent handoff. Block 0 must be a "
         "locker.handoff.v1 envelope. Every read reports an `integrity` block — "
