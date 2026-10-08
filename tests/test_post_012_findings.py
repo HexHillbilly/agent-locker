@@ -302,3 +302,97 @@ def test_a_valid_pad_still_returns_all_expected_block_fields(daemon):
     assert "error" not in r
     assert set(r["blocks"][0]) == {"seq", "prev_hash", "curr_hash", "payload_b64",
                                    "payload_utf8", "payload_utf8_source", "created_at"}
+
+
+# --------------------------------------------------------------------------- #
+# The bounded head_hash clarification: three heads, three provenances
+# --------------------------------------------------------------------------- #
+
+def test_manifest_without_a_ticket_does_not_mark_the_head_verified(daemon):
+    """No ticket means no chain was walked, so nothing about the head is confirmed."""
+    base, _, _ = daemon
+    pad_id, _, head = _sealed_pad(base)
+
+    m = mcp.locker_manifest(pad_id)                      # no ticket
+    assert "error" not in m, m
+    hp = m["head_provenance"]
+    assert hp["manifest_head"]["value"] == head
+    assert hp["manifest_head"]["source"] == "server_asserted"
+    assert hp["manifest_head"]["verified_by_client"] is False, \
+        "an unchecked manifest head was presented as verified"
+    assert hp["recomputed_head"]["value"] is None
+    assert hp["recomputed_head"]["source"] == "client_recomputed"
+    assert hp["expected_head"]["value"] is None
+    assert hp["expected_head"]["source"] == "caller_supplied"
+    # the existing field is untouched
+    assert m["head_hash"] == head
+    assert m["integrity"]["verdict"] == "not_checked"
+
+
+def test_manifest_with_a_ticket_marks_the_head_verified_by_the_client(daemon):
+    base, _, _ = daemon
+    pad_id, ticket, head = _sealed_pad(base)
+
+    m = mcp.locker_manifest(pad_id, ticket)
+    assert "error" not in m, m
+    hp = m["head_provenance"]
+    assert hp["manifest_head"]["verified_by_client"] is True
+    assert hp["manifest_head"]["value"] == head
+    assert hp["recomputed_head"]["value"] == head, \
+        "the recomputed head must be the client's own computation"
+    assert hp["recomputed_head"]["source"] == "client_recomputed"
+    assert hp["expected_head"]["value"] is None
+    assert m["integrity"]["verdict"] == "internal_consistency_only"
+
+
+def test_caller_supplied_head_is_named_as_such_and_not_confused_with_the_manifest(daemon):
+    base, _, _ = daemon
+    pad_id, ticket, head = _sealed_pad(base)
+    supplied = head            # correct value, but its trust is the caller's
+
+    m = mcp.locker_manifest(pad_id, ticket, expected_head_hash=supplied)
+    assert "error" not in m, m
+    hp = m["head_provenance"]
+    assert hp["expected_head"]["value"] == supplied
+    assert hp["expected_head"]["source"] == "caller_supplied"
+    assert hp["expected_head"]["checked"] is True
+    assert hp["expected_head"]["matches"] is True
+    assert hp["manifest_head"]["source"] == "server_asserted"
+    assert m["integrity"]["verdict"] == "trusted_head_match"
+
+
+def test_a_wrong_caller_head_never_becomes_the_manifest_head(daemon):
+    """The caller's value must not be echoed back in the manifest head's place."""
+    base, _, _ = daemon
+    pad_id, ticket, head = _sealed_pad(base)
+    wrong = "c" * 64
+    assert wrong != head
+
+    m = mcp.locker_manifest(pad_id, ticket, expected_head_hash=wrong)
+    assert "error" in m, m
+    assert m["error"]["cause"] == "expected_head_mismatch"
+    assert "head_provenance" not in m        # no result is returned at all
+
+    # and the unanchored result still reports the server's head, not the caller's
+    plain = mcp.locker_manifest(pad_id, ticket)
+    assert plain["head_provenance"]["manifest_head"]["value"] == head
+
+
+def test_the_annotation_is_additive_and_the_read_tool_is_unchanged(daemon):
+    """Existing manifest fields survive; the read tool keeps its own shape."""
+    base, _, _ = daemon
+    pad_id, ticket, head = _sealed_pad(base)
+
+    m = mcp.locker_manifest(pad_id, ticket)
+    for field in ("pad_id", "state", "block_count", "total_bytes", "sealed_at",
+                  "head_hash", "created_at", "expires_at", "integrity"):
+        assert field in m, field
+    assert m["head_provenance"]["note"], "the annotation must explain itself"
+
+    r = mcp.locker_read_blocks(pad_id, ticket, expected_head_hash=head)
+    assert "error" not in r
+    # the read tool returns no manifest head at all, so there is nothing to confuse;
+    # it distinguishes computed vs supplied through integrity.expected_head
+    assert "head_hash" not in r and "head_provenance" not in r
+    assert r["integrity"]["expected_head"]["observed"] == head
+    assert r["integrity"]["expected_head"]["expected"] == head

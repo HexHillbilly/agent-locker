@@ -5,7 +5,52 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
-## 0.1.2 — prepared, not yet published
+## 0.1.3 — release candidate, prepared 2026-10-08
+
+**Security fix.** Two behavioural changes in the MCP client; read them before upgrading.
+
+0.1.2 could *detect* a broken chain but would still hand you its payloads.
+
+- **A broken chain now fails closed.** If a block's recorded hashes do not match the
+  bytes it carries, both read tools return `error.kind = "verification_failed"` with
+  `cause: "chain_inconsistent"` and **no `blocks` key at all**. In 0.1.2 that failure
+  was reported only inside the `integrity` block: an unanchored read
+  (`locker_read_blocks` without `expected_head_hash`) returned the tampered payloads
+  in the normal result shape, so a caller that did not inspect the integrity metadata
+  consumed them. That is no longer possible, and it holds whether or not an expected
+  head was supplied.
+- **Callers must check for an error before touching blocks.** Code that read
+  `result["blocks"]` after a failed chain now finds no such key.
+  `result.get("blocks", [])` yields an empty list; unconditional indexing raises.
+  Test `"error" in result` first. Callers that already inspect `integrity.verdict`
+  are unaffected — the same verdict values are produced.
+- **`content_type` is no longer returned by the MCP read tools.** The daemon still
+  stores and serves it, and the hash never covered it. It is a *processing
+  instruction*, so a value like `text/html` beside a verified payload invited callers
+  to treat verified bytes as active content. It is omitted rather than replaced with
+  an asserted type; callers needing it must fetch it from the daemon and treat it as
+  unverified.
+- **Direct HTTP behaviour is unchanged.** Only the MCP client's responses changed.
+  The daemon's routes, request and response schemas, stored data and reported version
+  are untouched — anyone talking to `lockerd` over HTTP sees exactly what 0.1.2
+  served.
+- **`head_provenance` makes the three possible heads explicit.** `locker_manifest`
+  returns a new additive object naming `manifest_head` (asserted by the daemon, marked
+  `verified_by_client: false` unless a full chain was walked and this client's own
+  recomputation landed on it), `recomputed_head` (this client's own computation) and
+  `expected_head` (supplied by the caller). The existing `head_hash` field is
+  unchanged.
+- **What this does not fix.** A valid unanchored read still cannot detect a pad whose
+  entire history was rewritten *and* fully rehashed — such a chain is internally
+  perfect. **An independently trusted `expected_head_hash`, obtained from the writer
+  over a channel the daemon does not control, remains necessary for that protection.**
+  Do not obtain it from the daemon you are checking.
+
+**[C] This is a client behaviour change, not a daemon or hash-format migration.** The
+hash format, the database schema and the HTTP API are all unchanged, and no stored
+data is migrated.
+
+## 0.1.2 (2026-10-08)
 
 Changes since `0.1.1`. **Built and verified as a candidate; not tagged, not
 published to PyPI, not pushed to public GitHub, not deployed.** Retention and

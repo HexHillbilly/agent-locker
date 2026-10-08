@@ -48,7 +48,7 @@ lockermcp          # MCP server (stdio)
 ### B. From the source distribution
 
 ```bash
-tar xzf lockermcp-0.1.2.tar.gz && cd lockermcp-0.1.2
+tar xzf lockermcp-0.1.3.tar.gz && cd lockermcp-0.1.3
 python -m venv .venv && source .venv/bin/activate
 pip install .
 ```
@@ -379,6 +379,28 @@ still verifies. To detect that, pass `expected_head_hash` — a 64-character
 lowercase hex sha256 digest obtained from the writer over a **separately trusted
 channel**, commonly the `head_hash` returned by `locker_seal` or `locker_deposit` at
 seal time. The client recomputes the head from the chain it fetched and compares:
+
+**[C] The reference must originate outside the daemon you are checking.**
+`locker_manifest` also returns a `head_hash` — but that is the daemon's own
+assertion. Feeding it back as `expected_head_hash` compares the daemon against itself
+and proves nothing. Only a head obtained from the writer, over a channel the daemon
+does not control, is an independent reference.
+
+**[C] Three heads can appear in a result, and only one carries outside trust.**
+`locker_manifest` returns a `head_provenance` object so the three cannot be confused:
+
+| Head | Source | What it is worth |
+|------|--------|------------------|
+| `manifest_head` | asserted by the daemon queried | `verified_by_client` is **true only** when a full chain was walked and this client's own recomputation landed on that value; **false** otherwise, including a manifest request with no read ticket |
+| `recomputed_head` | computed by this client from the bytes it fetched | a genuine computation, but it says nothing about whether the history is the writer's |
+| `expected_head` | supplied by the caller | the only one whose trust comes from outside this daemon |
+
+The existing `head_hash` field is unchanged, so callers reading it keep working —
+they now have an explicit label saying whether anything confirmed it.
+
+`locker_read_blocks` returns no manifest head at all, so it has no equivalent
+ambiguity; it distinguishes the caller's value from the client's computation through
+`integrity.expected_head.expected` and `.observed`.
 
 ```json
 {"integrity": {"chain_valid": true, "blocks_verified": 3,

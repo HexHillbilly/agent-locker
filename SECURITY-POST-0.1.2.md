@@ -1,8 +1,8 @@
 # Security record — post-0.1.2 review findings
 
-Bounded change made after the 0.1.2 release in response to an independent review.
-**Local branch only: not published, not tagged, not deployed, no version bump, no
-artifact rebuild.**
+Bounded change made after the 0.1.2 release in response to an independent review,
+now prepared as the **0.1.3 release candidate**. **Local branch only: not published,
+not tagged, not deployed.**
 
 Branch: `security/post-0.1.2-findings`, based on the released source
 `a98924c0bdb87e2e14d4cb049b36056e3be2545b` (the `v0.1.2` tag target).
@@ -166,6 +166,80 @@ response-schema redesign was undertaken.
 
 ---
 
+## 3a. Bounded `head_hash` clarification (operator decision)
+
+### 3a.1 Trace — which head is which
+
+**[S]** `locker_manifest` returns the daemon's manifest verbatim, which includes the
+daemon's own `head_hash`. Separately, the client walks the chain and computes a head of
+its own. Three values can therefore appear in one family of results:
+
+| Head | Where it comes from | What it is |
+|------|--------------------|------------|
+| manifest head | `GET /v1/pads/{id}/manifest` → `head_hash` | a **server assertion**, returned unlabelled |
+| recomputed head | the client's own walk: `prev = ZERO`, then `expect = sha256(prev ++ payload_bytes)` and `prev = curr_hash` only when the recomputation matched | a genuine computation by this client from the bytes it fetched |
+| caller's expected head | the `expected_head_hash` argument | the only value whose trust originates outside this daemon |
+
+### 3a.2 Bypass inspection — presentation ambiguity, not a bypass
+
+**[S]** The operator asked for a stop-and-report if the trace revealed an actual
+verification bypass. It did not:
+
+- the comparison operand is `matches = expected == observed`;
+- `observed` is `prev if chain_valid else None`, and `prev` is built by iterative
+  recomputation over the payload bytes — never taken from the manifest;
+- the manifest's `head_hash` appears in exactly one executable position,
+  `if chain_valid and prev != head_hash: chain_valid = False`, i.e. as an **input** to
+  the internal-consistency test, never as the target the caller's reference is
+  compared against.
+
+So a caller supplying a reference can never be talked into comparing it against a
+server-supplied value. The defect is that the returned manifest head carried no label
+saying it was unconfirmed — which is exactly the presentation ambiguity the operator
+characterised. **Bounded clarification proceeded; scope was not expanded.**
+
+### 3a.3 Change
+
+**[C] Additive.** `locker_manifest` results gain one top-level key:
+
+```json
+"head_provenance": {
+  "manifest_head":   {"value": "<sha>",  "source": "server_asserted",
+                      "verified_by_client": false},
+  "recomputed_head": {"value": "<sha|null>", "source": "client_recomputed"},
+  "expected_head":   {"value": "<sha|null>", "source": "caller_supplied",
+                      "checked": false, "matches": null},
+  "note": "..."
+}
+```
+
+**[C] An unchecked manifest head is never marked verified.** `verified_by_client` is
+`true` only when a full chain was walked and this client's recomputation landed on that
+value. It is `false` for a manifest request **with no read ticket** — nothing was
+walked, so nothing was confirmed — and for any read where the chain could not be
+checked.
+
+**Compatibility:** the manifest's own `head_hash` field is untouched, so callers
+reading it keep working; they now have an explicit label saying whether anything
+confirmed it. `locker_read_blocks` is unchanged and gains nothing: it returns no
+manifest head, so it has no equivalent ambiguity, and it already separates the caller's
+value from the client's computation through `integrity.expected_head.expected` and
+`.observed`.
+
+**[S] Documentation.** `README.md` now states that a head read from the daemon being
+checked is **not** an independent reference and that feeding one back as
+`expected_head_hash` proves nothing — the existing examples already sourced the
+reference from the writer's seal response, and a new table makes the three-head
+distinction explicit. The manifest tool's own description carries the same warning.
+
+### 3a.4 Regression
+
+**[S]** Five focused tests added: a no-ticket manifest does not mark the head verified;
+a ticketed manifest marks it verified **by the client's own recomputation**; a
+caller-supplied head is labelled as such and not confused with the manifest's; a wrong
+caller head is never echoed as the manifest head (and no result is returned at all);
+and the annotation is additive while the read tool's shape is unchanged.
+
 ## 4. Tests
 
 **[S] Focused:** `tests/test_post_012_findings.py` — **12 tests**, all passing:
@@ -232,15 +306,22 @@ adversarial cases the original suite lacked; the full suite and the MCP e2e gree
 the response-contract change documented in `README.md` and the tool descriptions; no
 hash-format change, no daemon change, no version bump, no artifact rebuild.
 
-Before a release candidate is cut, the operator would need to decide:
+### 6.1 Operator decision (recorded)
 
-1. whether the response-contract change ships as `0.1.3` (patch) given it can break a
-   caller that indexed returned blocks on a failed chain — the intended direction, but
-   a behaviour change a consumer should notice;
-2. whether adjacent finding 3 (`head_hash`) is folded into the same change or issued
-   separately;
-3. whether a release note is published explaining the fail-closed change, since
-   consumers of 0.1.2 have not been told.
+The operator approved preparing **0.1.3** containing both fixes on this branch, and
+resolved all three questions above plus one addition:
+
+1. **Ships as `0.1.3`.** The fail-closed contract is intended; the breakage for a
+   caller that indexed returned blocks on a failed chain is accepted.
+2. **Adjacent finding 3 is folded in** as the bounded `head_hash` clarification above —
+   annotation and documentation only, with an explicit stop-and-report clause if the
+   trace had shown a real bypass rather than presentation ambiguity (§3a.2).
+3. **Release notes are required**, naming each behaviour change, the "check for an
+   error first" requirement, the unchanged direct-HTTP behaviour, and the surviving
+   limitation that a fully rewritten chain still needs an independently trusted head.
+4. **Boundary:** local implementation and private Gitea only. No public GitHub push, no
+   PyPI upload, no tagging, no live deployment, no daemon or hash-format change, no
+   Phase 4 work.
 
 **[C] Not done in this pass, by authorization:** no public GitHub push, no PyPI
 publication, no tag, no live deployment, no version bump, no artifact rebuild, no
