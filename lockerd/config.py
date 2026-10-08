@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 # Hard limits (memory-safe, per spec)
 MAX_BLOCK_BYTES = 64 * 1024          # max payload per block: 64 KB
+MAX_JSON_BODY_BYTES = 4096           # max streamed request body for routes whose
+                                     # body is a small JSON object (create, tickets)
 MAX_RESPONSE_BYTES = 64 * 1024       # max payload returned per blocks slice: 64 KB
 MAX_BLOCKS_PER_RESPONSE = 256        # max block count per blocks slice
 DEFAULT_MAX_BLOCKS = 32

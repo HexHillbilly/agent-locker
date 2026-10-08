@@ -62,7 +62,7 @@ def ticket_transport() -> str:
 
 server = MCPServer(
     "lockermcp",
-    version="0.1.3",
+    version="0.1.4",
     instructions=(
         "Append-only, tamper-evident agent-to-agent handoff. Block 0 must be a "
         "locker.handoff.v1 envelope. Every read reports an `integrity` block — "
@@ -621,6 +621,26 @@ def locker_seal(pad_id: str, write_key: str) -> dict:
 ))
 def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
                    payment_tx_hash: str | None = None) -> dict:
+    # Encode and validate every artifact BEFORE anything is created remotely.
+    #
+    # [C] This used to validate inside the append loop, i.e. after POST /v1/pads had
+    # already created a pad. A bad artifact then aborted the call with a bare
+    # ValueError while the pad existed on the daemon, and its pad_id, write_key and
+    # read_ticket were lost along with the exception -- an orphan nobody can read,
+    # write or clean up, because the capabilities to do so only ever existed in the
+    # returned dict. Checking locally first removes that failure mode entirely.
+    # The envelope is still validated by the daemon (this client does not carry the
+    # envelope rules), and the daemon's size limits are enforced remotely; those can
+    # still fail after creation -- see the note in README "Locking a handoff".
+    encoded: list[tuple[bytes, str]] = []
+    for artifact in artifacts:
+        if isinstance(artifact, (dict, list)):
+            encoded.append((json.dumps(artifact).encode(), "application/json"))
+        elif isinstance(artifact, str):
+            encoded.append((artifact.encode(), "text/plain"))
+        else:
+            raise ValueError("each artifact must be a string or dict")
+
     try:
         created = _request("POST", "/v1/pads", payment_tx_hash=payment_tx_hash, json={
             "ttl_seconds": ttl_seconds,
@@ -632,15 +652,7 @@ def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
         _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
                  content=json.dumps(envelope).encode(),
                  headers={"Content-Type": "application/json"})
-        for artifact in artifacts:
-            if isinstance(artifact, (dict, list)):
-                data = json.dumps(artifact).encode()
-                ct = "application/json"
-            elif isinstance(artifact, str):
-                data = artifact.encode()
-                ct = "text/plain"
-            else:
-                raise ValueError("each artifact must be a string or dict")
+        for data, ct in encoded:
             _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
                      content=data, headers={"Content-Type": ct})
         sealed = _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)

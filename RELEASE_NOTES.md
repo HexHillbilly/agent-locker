@@ -5,6 +5,54 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
+## 0.1.4
+
+**Data-integrity fix, plus a request-body limit and a seal check.** Read the first item
+before upgrading a write-enabled daemon.
+
+- **A concurrent `/health` request could discard an acknowledged write.** The daemon
+  serves every request from one SQLite connection, and `health_check()` probed write
+  capability by issuing `BEGIN IMMEDIATE` followed by `ROLLBACK` **on that shared
+  connection, without the lock that every other route takes**. A rollback landing between
+  another request's `INSERT` and its `COMMIT` discarded the insert while the request went
+  on to commit the head update and return `201` — an acknowledged block that is not
+  there. The same unlocked access could also make an unrelated request fail outright, and
+  the failure could go unnoticed because the surviving prefix is still a perfectly valid
+  chain. Health no longer performs **any** transaction control, reads on its own
+  read-only connection, and issues its remaining shared-connection read under the lock.
+  Every route now also owns its transaction explicitly, so a handler that fails or is
+  cancelled mid-way can no longer leave statements for a later request to commit.
+  **What this changes for you:** `database.writable` on `/health` still means "the
+  database is not read-only" — it is a capability indicator, not proof that a write will
+  succeed, and it no longer implies a live write probe ran.
+- **Request bodies on `POST /v1/pads` and `POST /v1/pads/{id}/tickets` are now capped at
+  4 KB.** They previously used framework body parsing, which buffers and parses the whole
+  body before any limit is consulted; a measured 2 MB body was accepted and cost ~6 MiB.
+  The cap is applied to the bytes actually received, before parsing, so a missing or
+  untrue `Content-Length` changes nothing and chunked input is capped identically. Over
+  the limit is `413 payload_too_large`, refused before any pad, ticket, receipt or block
+  is created. Routes that take no body never read one — an explicit policy. The per-block
+  (64 KB) and per-pad (256 KB) limits are unchanged.
+- **Sealing now checks the stored chain first.** `POST /v1/pads/{id}/seal` verifies
+  contiguous sequence numbers, hash linkage, the stored head and byte accounting, and
+  refuses with `409 inconsistent_pad` if they do not hold — leaving the pad open and its
+  rows untouched. It never repairs: recomputing a head or dropping blocks would destroy
+  the evidence that an acknowledged write went missing.
+
+**What this does not fix.** A store that already lost acknowledged writes is not
+repaired, and nothing here can prove whether it did: a correctly written chain that later
+lost its tail looks exactly like a short-but-consistent chain, because a pad keeps no
+independent record of what it acknowledged. `scripts/check_integrity.py <db>` reports
+what is structurally wrong in a store, read-only, and changes nothing — it can find
+inconsistency, never absence. If you suspect loss on a live store, stop concurrent health
+polling and writes and copy the database with its `-wal`/`-shm` files before anything
+else touches it.
+
+`locker_deposit` is one tool call, not one transaction: a failure part-way can leave a pad
+created with capabilities that only existed in the return value of the call that failed.
+Every artifact is now validated before the pad is created, which removes the common case;
+the daemon's own checks still run after creation. See README "Partial deposit".
+
 ## 0.1.3
 
 **Security fix.** Two behavioural changes in the MCP client; read them before upgrading.

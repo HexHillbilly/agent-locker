@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import ValidationError
 
 from . import __version__ as VERSION
 from . import config as cfg
@@ -57,6 +58,18 @@ def _err(*codes: int) -> dict:
     return {c: ERROR_RESPONSES[c] for c in codes}
 
 
+def _json_body(body_model) -> dict:
+    """OpenAPI ``requestBody`` for a route whose JSON body is read under a size cap.
+
+    These routes do not use the framework's body parsing, because that buffers the
+    whole body before any handler runs and before a limit can be consulted. They read
+    at most ``cfg.MAX_JSON_BODY_BYTES`` streamed bytes first (413 beyond that) and
+    validate afterwards, so the documented body has to be attached explicitly.
+    """
+    return {"requestBody": {"required": False, "content": {
+        "application/json": {"schema": body_model.model_json_schema()}}}}
+
+
 async def seed_demo_pad(store: db.Store) -> None:
     """Provision the permanent read-only demo pad if it does not exist."""
     if await store.get_pad(DEMO_PAD_ID) is not None:
@@ -94,9 +107,14 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         conn = await db.connect(config.db_path)
-        app.state.store = db.Store(conn, config.read_lease_seconds)
+        # A second, write-incapable connection for liveness reads. /health used to run
+        # on the shared request connection, where its BEGIN IMMEDIATE / ROLLBACK could
+        # discard another request's uncommitted write; see db.Store.health_check.
+        health_conn = await db.connect_readonly(config.db_path)
+        app.state.store = db.Store(conn, config.read_lease_seconds, health_conn=health_conn)
         await seed_demo_pad(app.state.store)
         yield
+        await health_conn.close()
         await conn.close()
 
     app = FastAPI(title="Agent Locker Daemon", version=VERSION, lifespan=lifespan)
@@ -131,6 +149,27 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 return None
         return body
 
+    def bounded_json_body(model):
+        """Read the body with a hard cap *before* parsing it, then validate.
+
+        A JSON body parameter is buffered in full before the framework parses it, so an
+        oversized body costs memory before any limit is consulted. This reads at most
+        ``cfg.MAX_JSON_BODY_BYTES`` streamed bytes and refuses beyond that with 413 --
+        measured from the bytes actually received, never from Content-Length, so a
+        missing or lying Content-Length changes nothing. Parsing happens only after the
+        size is known to be acceptable.
+        """
+        async def dependency(request: Request):
+            raw = await read_body(request, cfg.MAX_JSON_BODY_BYTES)
+            if raw is None:
+                raise api_error(413, "payload_too_large",
+                                f"request body exceeds {cfg.MAX_JSON_BODY_BYTES} bytes")
+            try:
+                return model.model_validate_json(raw)
+            except ValidationError:
+                raise api_error(422, "unprocessable", "invalid request body") from None
+        return dependency
+
     def verify_write_key(pad: dict, write_key: str) -> bool:
         return hmac.compare_digest(
             hashchain.sha256_hex(write_key.encode()), pad["write_key_hash"])
@@ -142,6 +181,17 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
             return None
 
     # ---- endpoints ----
+    #
+    # Request bodies, in full (see README "Request bodies"):
+    #   POST /v1/pads                          small JSON, capped at MAX_JSON_BODY_BYTES
+    #   POST /v1/pads/{id}/append              the block payload, capped at MAX_BLOCK_BYTES
+    #   POST /v1/pads/{id}/tickets             small JSON, capped at MAX_JSON_BODY_BYTES
+    #   POST /v1/pads/{id}/seal                no body
+    #   GET  /health, /manifest, /blocks       no body
+    # A route that takes no body never reads one, so a body sent to it is neither
+    # buffered by the application nor parsed; the server discards it unread. That is
+    # the deliberate policy for bodyless routes -- they have nothing to validate and
+    # reading the body would be the thing worth avoiding.
 
     @app.get("/health", response_model=HealthResponse)
     async def health(request: Request):
@@ -170,8 +220,10 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         return await health(request)
 
     @app.post("/v1/pads", status_code=201, response_model=PadCreatedResponse,
-              responses=_err(400, 402, 409, 502))
-    async def create_pad(request: Request, body: PadCreateRequest):
+              responses=_err(400, 402, 409, 413, 502),
+              openapi_extra=_json_body(PadCreateRequest))
+    async def create_pad(request: Request,
+                         body: PadCreateRequest = Depends(bounded_json_body(PadCreateRequest))):
         tx_hash = None
         payer_address = None
         amount_units = None
@@ -195,7 +247,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 raise HTTPException(
                     400, "payment verification failed: invalid transaction format")
             s = store(request)
-            async with s.lock:
+            async with s.lock, s.transaction():
                 if await s.has_receipt(tx_hash):
                     raise HTTPException(409, "payment already redeemed")
             try:
@@ -214,7 +266,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         write_key = secrets.token_urlsafe(32)
         read_ticket = secrets.token_urlsafe(32)
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             if config.auth_mode == cfg.AUTH_TXID:
                 ok = await s.create_pad_with_receipt(
                     pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks,
@@ -253,7 +305,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                             f"payload exceeds {cfg.MAX_BLOCK_BYTES} bytes")
         content_type = request.headers.get("content-type", "application/json")
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             pad = await s.get_pad(pad_id)
             if pad is None:
                 raise api_error(404, "not_found", "pad not found")
@@ -292,7 +344,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                    auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
         write_key = auth.credentials if auth else None
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             pad = await s.get_pad(pad_id)
             if pad is None:
                 raise api_error(404, "not_found", "pad not found")
@@ -304,6 +356,17 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                 raise api_error(409 if sealed else 410,
                                 "conflict" if sealed else "gone",
                                 f"pad is {pad['state']}")
+            # Seal defense: never put a seal on a pad whose stored chain does not hold
+            # together. Read-only, and it refuses rather than repairing -- silently
+            # recomputing a head or dropping blocks would destroy the evidence that an
+            # acknowledged write went missing. The refusal leaves the pad open and its
+            # rows untouched; the transaction guard rolls back anything this request did.
+            report = await s.chain_report(pad_id)
+            if not report["ok"]:
+                raise api_error(
+                    409, "inconsistent_pad",
+                    "refusing to seal: the stored chain is not consistent "
+                    f"({len(report['problems'])} problem(s): {'; '.join(report['problems'][:3])})")
             await s.seal_pad(pad_id)
             pad = await s.get_pad(pad_id)
         return {"pad_id": pad_id, "state": pad["state"],
@@ -311,8 +374,10 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
 
     @app.post("/v1/pads/{pad_id}/tickets", status_code=201,
               response_model=TicketMintResponse,
-              responses=_err(401, 404, 422))
-    async def mint_ticket(pad_id: str, request: Request, body: TicketMintRequest,
+              responses=_err(401, 404, 413, 422),
+              openapi_extra=_json_body(TicketMintRequest))
+    async def mint_ticket(pad_id: str, request: Request,
+                          body: TicketMintRequest = Depends(bounded_json_body(TicketMintRequest)),
                           auth: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
         """Mint an additional read ticket (e.g. a durable read_unlimited audit ticket).
 
@@ -325,7 +390,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
                             f"type must be 'read_once' or 'read_unlimited', got {ttype!r}")
         write_key = auth.credentials if auth else None
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             pad = await s.get_pad(pad_id)
             if pad is None:
                 raise api_error(404, "not_found", "pad not found")
@@ -339,7 +404,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
              responses=_err(404))
     async def manifest(pad_id: str, request: Request):
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             pad = await s.get_pad(pad_id)
             if pad is None:
                 raise api_error(404, "not_found", "pad not found")
@@ -367,7 +432,7 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
     ):
         is_demo = pad_id == DEMO_PAD_ID
         s = store(request)
-        async with s.lock:
+        async with s.lock, s.transaction():
             pad = await s.get_pad(pad_id)
             if pad is None:
                 raise api_error(404, "not_found", "pad not found")

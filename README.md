@@ -48,7 +48,7 @@ lockermcp          # MCP server (stdio)
 ### B. From the source distribution
 
 ```bash
-tar xzf lockermcp-0.1.3.tar.gz && cd lockermcp-0.1.3
+tar xzf lockermcp-0.1.4.tar.gz && cd lockermcp-0.1.4
 python -m venv .venv && source .venv/bin/activate
 pip install .
 ```
@@ -110,10 +110,42 @@ use the installed entry point directly:
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
 | GET    | `/v1/pads/{id}/blocks` | `Authorization: Bearer <read_ticket>` (or `?ticket=`) | bounded slice of blocks |
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
+| HEAD   | `/health` | none | same as `GET` |
 
 `demo-pad-v1` is a read-only pad re-seeded on startup; its blocks are readable
 without a ticket (`GET /v1/pads/demo-pad-v1/blocks`). Its published test write key
 is `demo-write-key` — writing to it returns `409 Conflict`.
+
+### Request bodies
+
+Every route that reads a body is capped, and the cap is enforced on the bytes
+actually received — a missing, short, or untrue `Content-Length` changes nothing,
+because the limit is applied to the stream as it arrives and before anything is
+parsed or stored:
+
+| Route | Body | Limit |
+|-------|------|-------|
+| `POST /v1/pads` | small JSON (`ttl_seconds`, `max_blocks`) | 4 KB (`MAX_JSON_BODY_BYTES`) |
+| `POST /v1/pads/{id}/tickets` | small JSON (`type`) | 4 KB (`MAX_JSON_BODY_BYTES`) |
+| `POST /v1/pads/{id}/append` | the block payload bytes | 64 KB (`MAX_BLOCK_BYTES`) |
+| `POST /v1/pads/{id}/seal` | **no body** | — |
+| `GET /health`, `/v1/pads/{id}/manifest`, `/v1/pads/{id}/blocks` | **no body** | — |
+
+Over the limit is `413 payload_too_large`, and the request is refused before any pad,
+ticket, receipt or block is created — the size check runs before the body is parsed,
+so an oversized body that is also invalid JSON is a `413`, not a `422`.
+
+A route that takes no body never reads one. That is deliberate, not an oversight: the
+application does not buffer or parse a body it has no use for. The web server still
+has to read past it on the connection, so a bodyless route is not a way to save
+bandwidth — it is a way to guarantee the daemon never spends memory on it.
+
+**[C] Liveness is not a write test.** `/health` reports `database.writable`, which means
+exactly what the 503 contract needs: the store's connection is not in read-only mode.
+It is a capability indicator, not proof that a specific write will succeed — a write
+can still fail for reasons this probe cannot see (a full disk, a lock held by another
+process). It also performs no transaction control of its own (see "Transactions and
+liveness" below), so polling it can never disturb a write in flight.
 
 ## Handoff envelope (block 0)
 
@@ -328,6 +360,59 @@ here is a durability guarantee, and nothing in the daemon deletes data.
   pages, or from the volume that holds a copy. No backup deletion or
   secure-erasure promise exists here.
 
+## Transactions and liveness
+
+**[C] One connection, one owner.** The daemon serves every request from a single SQLite
+connection (WAL mode), and two rules keep that safe:
+
+1. **Every statement on that connection is issued while holding the store lock.** That
+   lock is what makes a multi-statement operation atomic with respect to other
+   coroutines — each `await` yields, and without it another coroutine's statements, and
+   its `COMMIT` or `ROLLBACK`, can land in the middle of one.
+2. **Only the owner of a transaction may end it.** Nothing outside an operation issues
+   `COMMIT` or `ROLLBACK` on the shared connection. A stray `ROLLBACK` discards whatever
+   another coroutine has written but not yet committed, while that coroutine goes on to
+   report success — a `201` for a block that is not there.
+
+`/health` used to break rule 2: it probed write capability with `BEGIN IMMEDIATE` /
+`ROLLBACK` on the shared connection, without the lock. Under concurrent health polling
+that could discard an acknowledged append while the request still returned success, and
+it could also make an unrelated request fail outright (`cannot commit transaction - SQL
+statements in progress`) when its cursor was mid-flight. Health now performs no
+transaction control at all, reads its aggregates on a **separate connection opened
+read-only** (`PRAGMA query_only = ON`, so it cannot write even if the code around it is
+wrong later), and issues its single remaining shared-connection read under the lock like
+everything else.
+
+**[C] Scope.** The store lock serializes coroutines *within one process*. Each process
+opens its own connection, so this is the correct protection for the single-process
+deployment described here; it is not a cross-process lock, and running multiple workers
+against one connection is not supported.
+
+**Sealing checks first.** `POST /v1/pads/{id}/seal` verifies the stored chain before it
+seals — contiguous `seq`, hash linkage, the stored head, and byte accounting against the
+stored payloads. A pad that fails is refused with `409 inconsistent_pad` and left exactly
+as it was. It is never silently repaired: recomputing a head or dropping blocks would
+destroy the only evidence that an acknowledged write went missing.
+
+**Checking an existing store.** `scripts/check_integrity.py <db>` reports the same
+properties for every pad, opening the database read-only and changing nothing:
+
+```bash
+python scripts/check_integrity.py /path/to/locker.db        # human-readable
+python scripts/check_integrity.py /path/to/locker.db --json # machine-readable
+```
+
+Exit `0` means every pad is consistent, `1` means problems were found, `2` means the
+database could not be read. **[C] It cannot tell you that data was lost.** It only sees
+the rows that are present. A chain that was written correctly and then had acknowledged
+tail data discarded looks exactly like a short-but-consistent chain, because a pad keeps
+no independent record of what it acknowledged. Catching that needs *your* acknowledgment
+records — the `pad_id`, `seq` and `curr_hash` from each `201` — which is the only thing
+that can witness a write that is no longer there. If you suspect loss on a live store:
+stop concurrent health polling and writes, copy the database and its `-wal`/`-shm`
+files before anything else touches them, and run this script on the copy.
+
 ## Payments (txid)
 
 Opt-in pay-per-pad using USDC on Base. Set `LOCKER_MODE=txid` (default `open`)
@@ -347,11 +432,38 @@ to require proof of payment on `POST /v1/pads`.
 The rail is off by default. Its tests run against mocks; **production payment
 enforcement has not been exercised against a live payment and is unverified.**
 
+## Partial deposit
+
+`locker_deposit` is one tool call, not one transaction. It issues several independent
+HTTP requests — create the pad, append the envelope, append each artifact, seal — and a
+failure in the middle leaves the requests that already succeeded in place.
+
+What is guaranteed: every artifact is encoded and type-checked before the pad is created,
+so an invalid artifact cannot orphan a pad. What is **not**: the daemon's own checks run
+after creation, so a rejected envelope, a block over 64 KB, or a pad over its byte quota
+all fail with the pad already existing.
+
+**[C] The consequence is a capability problem, not just a stray row.** A pad is only
+reachable with the `write_key` and `read_ticket` minted at creation, and those exist only
+in the return value of the call that failed. An orphaned pad is therefore not
+readable, not writable, and not removable — by anyone, including the operator, through
+this API.
+
+**What to do if a deposit raises.** Treat it as "a pad may exist that I do not have
+credentials for". Do not retry blindly: a retry creates a second pad, and the first one
+stays. Record the failure, and account for the possibility of orphans.
+
+**[U] A recovery contract is an open design question, deliberately not implemented.** A
+partial remote success that returns capabilities to the caller needs a stated design —
+what the caller receives, when, and on which failure classes — before any code. A
+proposal is recorded in `SECURITY-NOTES-0.1.4.md`. Nothing in this release creates,
+deletes, compensates, replays or repairs anything on a caller's behalf.
+
 ## MCP server (`lockermcp`)
 
 Six tools over stdio (Python MCP SDK v2, `MCPServer`):
 
-- `locker_deposit(envelope, artifacts, ttl_seconds=3600)` → `{pad_id, read_ticket, head_hash, status}` — atomic create + append envelope + append artifacts + seal in one call (recommended for one-shot handoffs; avoids multi-step batching hazards)
+- `locker_deposit(envelope, artifacts, ttl_seconds=3600)` → `{pad_id, read_ticket, head_hash, status}` — create + append envelope + append artifacts + seal, in one tool call (recommended for one-shot handoffs; avoids multi-step batching hazards). **[C] It is one call, not one transaction:** it is a sequence of independent requests, and each one is atomic on its own. If a request in the middle fails, the pad already created stays where it is. Every artifact is therefore encoded and type-checked *before* the pad is created, so a bad artifact cannot leave an orphan behind — but the daemon's own checks (envelope shape, per-block and per-pad size limits) are only reachable after creation, so those can still fail part-way. Treat a deposit that raises as "a pad may exist that I do not have credentials for", and see "Partial deposit" below.
 - `locker_create(ttl_seconds, max_blocks=32)` → `{pad_id, write_key, read_ticket}`
 - `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}`
 - `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}`
