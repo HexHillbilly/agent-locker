@@ -135,17 +135,24 @@ Over the limit is `413 payload_too_large`, and the request is refused before any
 ticket, receipt or block is created — the size check runs before the body is parsed,
 so an oversized body that is also invalid JSON is a `413`, not a `422`.
 
-A route that takes no body never reads one. That is deliberate, not an oversight: the
-application does not buffer or parse a body it has no use for. The web server still
-has to read past it on the connection, so a bodyless route is not a way to save
-bandwidth — it is a way to guarantee the daemon never spends memory on it.
+**[C] For a route with no body, the policy is that the application does not consume the
+body.** It is not a size limit: there is no `413` for a bodyless route, and a body sent to
+one is neither parsed, stored, nor validated by the daemon. Scope, stated exactly: the
+*application* never allocates for it. The ASGI server still reads past it on the
+connection to keep the connection usable, so a bodyless route is **not** a bandwidth
+protection and **not** a defence against a client that sends a huge body — it only means
+the daemon's own memory never grows because of it.
 
 **[C] Liveness is not a write test.** `/health` reports `database.writable`, which means
 exactly what the 503 contract needs: the store's connection is not in read-only mode.
 It is a capability indicator, not proof that a specific write will succeed — a write
 can still fail for reasons this probe cannot see (a full disk, a lock held by another
 process). It also performs no transaction control of its own (see "Transactions and
-liveness" below), so polling it can never disturb a write in flight.
+liveness" below). It therefore has nothing to roll back and nothing to interleave:
+polling it cannot end or corrupt another request's transaction, which is the failure this
+release fixes. It is not a claim of zero interaction — health still takes the store lock
+for its single shared-connection read, so a poll and a write do serialize briefly at that
+one statement.
 
 ## Handoff envelope (block 0)
 

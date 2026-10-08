@@ -267,16 +267,18 @@ def create_app(config: cfg.Config | None = None) -> FastAPI:
         read_ticket = secrets.token_urlsafe(32)
         s = store(request)
         async with s.lock, s.transaction():
-            if config.auth_mode == cfg.AUTH_TXID:
-                ok = await s.create_pad_with_receipt(
-                    pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks,
-                    tx_hash, amount_units, payer_address)
-                if not ok:
-                    raise HTTPException(409, "payment already redeemed")
-            else:
-                await s.create_pad(pad_id, hashchain.sha256_hex(write_key.encode()),
-                                   ttl, max_blocks)
-            await s.create_ticket(read_ticket, pad_id, "read_once", 1)
+            # One method, one commit: the pad, its first read ticket, and -- on the paid
+            # path -- the payment receipt land together or not at all. Composing
+            # create_pad + create_ticket here gave the operation two commit points, so a
+            # failure between them left a pad that nobody held the credentials for.
+            ok = await s.create_pad_with_ticket(
+                pad_id, hashchain.sha256_hex(write_key.encode()), ttl, max_blocks,
+                read_ticket, "read_once", 1,
+                receipt=((tx_hash, amount_units, payer_address)
+                         if config.auth_mode == cfg.AUTH_TXID else None))
+            if not ok:
+                # tx_hash was already redeemed: nothing was written, including the pad.
+                raise HTTPException(409, "payment already redeemed")
         return {"pad_id": pad_id, "write_key": write_key, "read_ticket": read_ticket}
 
     @app.post("/v1/pads/{pad_id}/append", status_code=201,

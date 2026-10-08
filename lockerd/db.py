@@ -7,7 +7,7 @@ request. Two rules keep it safe, and both are load-bearing:
 
 1. **Every statement on that connection is issued while holding** :attr:`Store.lock`.
    ``Store.lock`` is what makes a multi-statement operation atomic with respect to
-   other coroutines -- the individual ``await``\ s yield, and without the lock another
+   other coroutines -- every individual await yields, and without the lock another
    coroutine's statements, and its ``COMMIT``/``ROLLBACK``, can land in the middle of
    one. Methods here are deliberately lock-free so that a caller can hold the lock
    across a whole compound operation; the request layer does exactly that.
@@ -20,6 +20,14 @@ request. Two rules keep it safe, and both are load-bearing:
 control at all (see its docstring), and reads its aggregates on a separate connection
 when one is supplied (:attr:`Store.health_conn`) so a liveness probe never touches the
 connection carrying application work.
+
+3. **Lock ownership is not atomicity.** Each write method commits its own work, so an
+   operation assembled from two of them has two commit points and is **not** atomic: an
+   outer :meth:`Store.transaction` rollback cannot undo an inner commit. A route that has
+   to be all-or-nothing must use one method that writes the whole thing (see
+   :meth:`Store.create_pad_with_ticket`) rather than composing two. What
+   :meth:`Store.transaction` guarantees is narrower and precise: **no uncommitted work
+   outlives the request** that produced it.
 
 **[C] Scope of the lock.** ``asyncio.Lock`` serializes coroutines within *one process*.
 Each process opens its own connection, so this is the correct protection for the
@@ -170,11 +178,27 @@ class Store:
         await cur.close()
         return row is not None
 
-    async def create_pad_with_receipt(self, pad_id, write_key_hash, ttl_seconds,
-                                      max_blocks, tx_hash, amount_units, payer_address):
-        """Atomically create a pad and record its payment receipt.
+    async def create_pad_with_ticket(self, pad_id, write_key_hash, ttl_seconds, max_blocks,
+                                     ticket_id, ticket_type="read_once", max_reads=1,
+                                     receipt=None):
+        """Create a pad, its initial read ticket, and optionally its payment receipt -- in
+        ONE transaction.
 
-        Returns False (leaving no pad behind) if ``tx_hash`` was already redeemed.
+        **[C] Why this exists.** A route that calls ``create_pad`` and then
+        ``create_ticket`` has two commit points and is not atomic (module docstring, rule
+        3). Creating a pad and then failing to create its ticket left a pad whose
+        ``write_key`` and ``read_ticket`` existed only in the return value of the call
+        that failed -- unreachable by anyone, including the operator, through this API.
+        This method makes the pad and its ticket (and, on the paid path, the receipt) a
+        single unit: all of it lands, or none of it does.
+
+        ``receipt`` is ``(tx_hash, amount_units, payer_address)`` or ``None``. When it is
+        given and ``tx_hash`` is already redeemed, **nothing** is written -- not the pad,
+        not the ticket, not a partial receipt -- and this returns ``False``. Replay
+        protection therefore covers the whole operation, not just the receipt insert.
+
+        Rolls back on cancellation as well as on error, so a cancelled request cannot
+        leave a half-built pad behind.
         """
         t = now()
         try:
@@ -183,17 +207,24 @@ class Store:
                 " VALUES (?,?,?,?,?,?)",
                 (pad_id, t, t + ttl_seconds, max_blocks, cfg.DEFAULT_MAX_BYTES, write_key_hash),
             )
+            if receipt is not None:
+                tx_hash, amount_units, payer_address = receipt
+                await self.conn.execute(
+                    "INSERT INTO payment_receipts (tx_hash, pad_id, amount_units, payer_address, created_at)"
+                    " VALUES (?,?,?,?,?)",
+                    (tx_hash, pad_id, amount_units, payer_address, t),
+                )
             await self.conn.execute(
-                "INSERT INTO payment_receipts (tx_hash, pad_id, amount_units, payer_address, created_at)"
+                "INSERT INTO tickets (ticket_id, pad_id, type, max_reads, created_at)"
                 " VALUES (?,?,?,?,?)",
-                (tx_hash, pad_id, amount_units, payer_address, t),
+                (ticket_id, pad_id, ticket_type, max_reads, t),
             )
             await self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             await self.conn.rollback()
             return False
-        except Exception:
+        except BaseException:
             await self.conn.rollback()
             raise
 
@@ -309,16 +340,29 @@ class Store:
         between another coroutine's ``INSERT`` and its ``COMMIT`` discards that write
         while the request still reports success. See the module docstring, rule 2.
 
-        ``writable`` is the documented "503 if DB read-only" signal: it means the
-        store's connection is not in read-only mode. **[C] It is a capability
-        indicator, not proof that a write succeeded** -- a later write can still fail
-        for reasons this probe cannot see (disk full, a lock held by another process).
+        ``writable`` reports **SQLite's connection-level read-only flag** --
+        ``PRAGMA query_only`` on the store's connection -- which is what the documented
+        "200 ok / 503 if DB read-only" contract asks for. **[C] It measures neither of
+        the two things it is easy to mistake it for:**
+
+        * **not filesystem writability.** The database file may be perfectly writable
+          while this reports ``False``, and vice versa: a read-only *connection* says
+          nothing about file permissions or a read-only mount.
+        * **not a successful write probe.** It does not attempt a write and must not be
+          read as evidence that one will succeed. A write can still fail for reasons
+          this cannot see -- a full disk, a lock held by another process, an immutable
+          file. The probe that used to try (``BEGIN IMMEDIATE`` / ``ROLLBACK``) is what
+          corrupted other requests' transactions and is gone.
 
         The single read against the shared connection is taken under :attr:`lock`, like
-        every other statement on it. The aggregates are read on
-        :attr:`health_conn` when one was supplied, so a liveness probe does not
-        interleave a cursor with application work; without one they are read under the
-        lock as well, which keeps rule 1 true in every configuration.
+        every other statement on it. The aggregates are read on :attr:`health_conn` when
+        one was supplied, so a liveness probe does not interleave a cursor with
+        application work; without one they are read under the lock as well, which keeps
+        rule 1 true in every configuration. **[S] Measured behaviour:** a poll and a
+        write do serialize for the duration of that one shared-connection read; 60
+        consecutive polls created no new connection and no new task, and cancelling a
+        poll mid-flight left the lock free and the connection usable (see
+        ``tests/test_transaction_boundary.py``).
         """
         async with self.lock:
             read_only = bool(await self._pragma_scalar(self.conn, "PRAGMA query_only"))

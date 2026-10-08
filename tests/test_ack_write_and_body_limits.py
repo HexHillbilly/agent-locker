@@ -380,6 +380,75 @@ def json_exactly(n: int, base: dict) -> bytes:
     return raw + b" " * (n - len(raw))
 
 
+def largest_pad_body() -> bytes:
+    """The largest semantically valid pad-creation body the schema admits."""
+    return json.dumps({"ttl_seconds": cfg.MAX_TTL_SECONDS,
+                       "max_blocks": cfg.MAX_MAX_BLOCKS}).encode()
+
+
+def largest_ticket_body() -> bytes:
+    """The largest semantically valid ticket body the schema admits."""
+    return json.dumps({"type": "read_unlimited"}).encode()
+
+
+async def test_every_valid_pad_creation_combination_is_accepted(rig):
+    """Every field combination the schema allows must fit the cap easily."""
+    client, app, store, _ = rig
+    combos = [
+        {},                                                          # both defaults
+        {"ttl_seconds": cfg.MAX_TTL_SECONDS},                        # max ttl only
+        {"max_blocks": cfg.MAX_MAX_BLOCKS},                          # max blocks only
+        {"ttl_seconds": cfg.MAX_TTL_SECONDS, "max_blocks": cfg.MAX_MAX_BLOCKS},  # both at max
+        {"ttl_seconds": 1, "max_blocks": 1},                         # both at min
+        {"ttl_seconds": cfg.MAX_TTL_SECONDS, "max_blocks": 1},
+        {"ttl_seconds": 1, "max_blocks": cfg.MAX_MAX_BLOCKS},
+    ]
+    for combo in combos:
+        r = await client.post("/v1/pads", content=json.dumps(combo).encode(),
+                              headers={"Content-Type": "application/json"})
+        assert r.status_code == 201, (combo, r.status_code, r.text)
+    # field order must not matter either
+    r = await client.post("/v1/pads",
+                          content=b'{"max_blocks":4096,"ttl_seconds":2592000}',
+                          headers={"Content-Type": "application/json"})
+    assert r.status_code == 201, r.text
+
+
+async def test_every_valid_ticket_type_is_accepted(rig):
+    client, app, store, _ = rig
+    pad = await new_pad(client)
+    for ttype in ("read_once", "read_unlimited"):
+        r = await client.post(f"/v1/pads/{pad['pad_id']}/tickets",
+                              content=json.dumps({"type": ttype}).encode(),
+                              headers={"Authorization": f"Bearer {pad['write_key']}",
+                                       "Content-Type": "application/json"})
+        assert r.status_code == 201, (ttype, r.text)
+    # the field's default (an omitted body) is accepted too
+    r = await client.post(f"/v1/pads/{pad['pad_id']}/tickets", content=b"{}",
+                          headers={"Authorization": f"Bearer {pad['write_key']}",
+                                   "Content-Type": "application/json"})
+    assert r.status_code == 201, r.text
+
+
+async def test_the_cap_is_far_above_the_largest_valid_request(rig):
+    """A cap that could reject a valid request would be worse than no cap."""
+    client, app, store, _ = rig
+    lpad, ltick = len(largest_pad_body()), len(largest_ticket_body())
+    assert lpad < LIMIT, f"the largest valid pad body ({lpad} B) does not fit {LIMIT} B"
+    assert ltick < LIMIT, f"the largest valid ticket body ({ltick} B) does not fit {LIMIT} B"
+    assert lpad * 50 < LIMIT and ltick * 50 < LIMIT, (
+        f"margin is too thin: largest bodies {lpad}/{ltick} B against a {LIMIT} B cap")
+    print(f"\n  cap {LIMIT} B; largest valid pad body {lpad} B; "
+          f"largest valid ticket body {ltick} B; margin >{LIMIT // lpad}x / >{LIMIT // ltick}x")
+    # both are accepted at exactly their largest form
+    assert (await client.post("/v1/pads", content=largest_pad_body(),
+                              headers={"Content-Type": "application/json"})).status_code == 201
+    pad = await new_pad(client)
+    assert (await client.post(f"/v1/pads/{pad['pad_id']}/tickets", content=largest_ticket_body(),
+                              headers={"Authorization": f"Bearer {pad['write_key']}",
+                                       "Content-Type": "application/json"})).status_code == 201
+
+
 @pytest.mark.parametrize("route,base", [
     ("/v1/pads", {"ttl_seconds": 3600, "max_blocks": 4}),
 ])

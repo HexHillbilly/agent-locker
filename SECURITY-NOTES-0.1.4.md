@@ -76,9 +76,16 @@ reported symptom — but not the cursor-interleaving failure above, and not the
    probe is gone. `database.writable` is derived from the read-only indicator, which is
    what the documented contract already promised ("200 ok / 503 if DB read-only"). The
    probe was the thing that corrupted data, and it was never part of the contract.
-2. **Health reads on its own connection, opened read-only** (`PRAGMA query_only = ON`).
-   A liveness probe cannot roll back, cannot break another request's `COMMIT`, needs no
-   lock, and never blocks a writer.
+2. **Health reads on its own connection, opened read-only.** `connect_readonly()` opens
+   a second `aiosqlite` connection to the same file and sets `PRAGMA query_only = ON` on
+   it, so that connection *cannot* write — a probe holding it cannot commit or roll back
+   anything even if the surrounding code is wrong later. Its aggregates are read there.
+   **[S] Measured, rather than asserted as an absolute:** a poll and a write serialize
+   only for the duration of health's one shared-connection read (the `query_only` flag);
+   60 consecutive polls created no new connection and no new task; cancelling a poll
+   mid-flight left the store lock free and the connection usable. Health does **not**
+   hold the lock for its aggregates and does not stop taking it for that one statement,
+   so "never blocks a writer" would be false.
 3. **Health's single remaining shared-connection read is taken under the lock**, so the
    invariant "every statement on the shared connection is issued under the lock" holds
    without exception.
@@ -127,6 +134,57 @@ and all four use framework JSON body parsing. So the finding applies to every pu
 release to date. Nothing here proves or disproves the reviewers' observations about other
 deployments; only 0.1.3 was exercised on this machine.
 
+## 1a. The exact transaction boundary
+
+**[S] Lock ownership is not atomicity, and the difference decides whether a rollback can
+undo anything.** Every write method in the store commits its own work:
+
+| Method | Commits | Atomic on its own |
+|---|---|---|
+| `create_pad` | yes | yes (one INSERT) |
+| `create_pad_with_ticket` (**new**) | yes, once | yes — pad + ticket + optional receipt |
+| `expire_pad_if_needed` | yes | yes |
+| `seal_pad` | yes | yes |
+| `append_block` | yes | yes (INSERT + head UPDATE together) |
+| `create_ticket` | yes | yes |
+| `record_read` | yes | yes (lease activation) |
+| `health_check` | **no** | non-mutating |
+
+So an operation assembled from two of them has two commit points and is **not** atomic:
+`Store.transaction()`'s rollback cannot undo an inner commit that already happened. What
+it does guarantee is narrower and exact — **no uncommitted work outlives the request** —
+and that is the guarantee the tests exercise: mutate, then fail, then look with a separate
+connection.
+
+**[S] Found and fixed:** the create route composed `create_pad` + `create_ticket`, so a
+failure between them committed the pad and not its ticket. The `write_key` and
+`read_ticket` existed only in the return value of the call that failed, which made the pad
+unreachable by anyone through the API — an orphan in the same class as Finding C. Creation
+is now **one method, one commit**: `create_pad_with_ticket(pad_id, write_key_hash,
+ttl_seconds, max_blocks, ticket_id, ticket_type, max_reads, receipt=None)`. The
+receipt-only `create_pad_with_receipt` was removed rather than left beside it, because two
+near-identical constructors invite the weaker one being picked later; it was internal and
+only this route used it.
+
+**[S] Replay protection covers the whole operation, not just the receipt.** If the
+`tx_hash` is already redeemed the method writes **nothing** — no pad, no ticket, no
+partial receipt — and returns `False`, which the route turns into `409`. On a failure
+between the writes nothing is consumed either, so the caller may retry with the same
+payment; a *successful* creation still makes the second attempt `409` and leaves exactly
+one receipt. Both directions are tested.
+
+**[S] Cancellation and injected failures, per operation,** each inspected through a
+separately opened connection and each asserting the lock is free before the next request:
+
+| Operation | Injected point | Result |
+|---|---|---|
+| pad creation + initial ticket | after the pad INSERT, on the ticket INSERT | no pad, no ticket; the next request acquires the lock cleanly |
+| pad creation + receipt + ticket (paid) | on the ticket INSERT | no pad, no receipt; the payment stays redeemable |
+| append | after the block INSERT | no block, head and byte count not advanced |
+| seal | after the state UPDATE | pad still `open`, `sealed_at` still `NULL`, and still sealable |
+| ticket activation (lease) | after the lease UPDATE | `redeemed_count` 0, `lease_started_at` `NULL`, ticket still usable |
+| cancellation | parked inside append while holding the lock | nothing persisted, lock released, next append works |
+
 ## 2. Finding B — JSON bodies bypassed the documented cap
 
 **[S] Reproduced with a bounded measurement** (2,097,201-byte body, peak allocation
@@ -146,9 +204,28 @@ megabytes to demonstrate an exhaustion.
 **[C] Fix:** both routes read at most `MAX_JSON_BODY_BYTES` (**4 KB**) of *streamed* bytes
 before parsing, refuse beyond that with `413 payload_too_large`, and validate only
 afterwards. The limit counts bytes actually received, so a missing, short or untrue
-`Content-Length` changes nothing, and chunked input is capped identically. A route that
-takes no body never reads one — an explicit policy, tested at the ASGI level by counting
-`receive()` calls. The per-block (64 KB) and per-pad (256 KB) limits are unchanged.
+`Content-Length` changes nothing, and chunked input is capped identically. The per-block
+(64 KB) and per-pad (256 KB) limits are unchanged.
+
+**[S] The cap cannot reject a valid request — measured, not assumed.** Both schemas were
+enumerated against every supported field and combination:
+
+* `PadCreateRequest` — `ttl_seconds` (1..2,592,000), `max_blocks` (1..4,096), both
+  optional. Largest valid body: **44 B** (`{"ttl_seconds": 2592000, "max_blocks": 4096}`).
+  All seven present/absent combinations, both minima and both maxima, and a
+  field-order-swapped body are all accepted.
+* `TicketMintRequest` — `type` (default `read_unlimited`). Largest valid body: **26 B**.
+  Both ticket types and an omitted body (`{}`) are accepted.
+
+So the cap is **>93x** the largest valid pad body and **>157x** the largest valid ticket
+body, and a valid body padded to exactly 4,096 B is still accepted.
+
+**[C] Bodyless routes, precisely:** the policy is that **the application does not consume
+the body** — there is no `413` on those routes and nothing is parsed, stored or validated.
+The scope is stated where it is enforced and in the README: the *application* never
+allocates for it, while the ASGI server still reads past it on the connection, so this is
+neither a bandwidth protection nor a defence against a large body. It only bounds the
+daemon's own memory. Tested at the ASGI level by counting `receive()` calls.
 
 ## 3. Finding C — deposit partial failures
 
