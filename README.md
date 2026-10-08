@@ -185,8 +185,11 @@ What the chain establishes:
   single mutated payload breaks verification. The tamper-evidence is checked
   programmatically by the client before blocks enter LLM context, which prevents
   context drift and transport manipulation.
-- **Change detection against a trusted head.** If a reader retains a pad's
-  `head_hash` independently, it can detect any later rewrite of the pad.
+- **Change detection against a trusted head.** A reader that holds a pad's
+  `head_hash` **independently of the daemon** — the value returned when the pad was
+  sealed — can detect any later rewrite of the pad, including one where the whole
+  chain was recomputed so that it verifies against itself. Pass it as
+  `expected_head_hash`; see *Trusted-head verification* below.
 
 What the chain does **not** establish:
 
@@ -196,10 +199,23 @@ What the chain does **not** establish:
 - It does **not** make the attestation true. Block 1 is free-form and
   unvalidated: `verification.exit_code`, `tests_passed`, and
   `canonical_ref.commit_sha` are claims the writer makes about itself.
+- It does **not** authenticate the pad **metadata**, which is where the
+  verification inputs come from. `state`, `block_count`, `total_bytes`,
+  `sealed_at`, `created_at`, `expires_at` and `head_hash` in the manifest, and
+  `prev_hash` / `curr_hash` / `payload_utf8` / `created_at` on each block, are all
+  unauthenticated claims by the host. The client is *told* how many blocks to walk
+  and what head to land on, so a hostile host can withhold blocks, serve a
+  consistent prefix, or misreport state; the walk proves only that the blocks it
+  received agree with each other and — when you supply a reference — with that
+  reference. `payload_utf8` is a convenience decode of `payload_b64` and is not
+  itself verified.
 - It does **not** defend against a malicious operator. Whoever runs the daemon
   can rewrite both the chain and the head it serves; self-verification against a
-  head obtained from the same server proves nothing new. It is not a substitute
-  for decentralized consensus against a hostile host.
+  head obtained from the same server proves nothing new. Supplying an
+  `expected_head_hash` from a *separate* trusted channel does narrow this — the
+  rewrite is caught unless that channel is also compromised — but it is still not
+  a substitute for decentralized consensus against a hostile host, and it does not
+  establish writer identity.
 
 ## Auth & tickets
 
@@ -244,8 +260,8 @@ Six tools over stdio (Python MCP SDK v2, `MCPServer`):
 - `locker_create(ttl_seconds, max_blocks=32)` → `{pad_id, write_key, read_ticket}`
 - `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}`
 - `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}`
-- `locker_manifest(pad_id, ticket=None)` → manifest (free on the daemon)
-- `locker_read_blocks(pad_id, ticket, from_block=0, to_block=0)` → blocks slice
+- `locker_manifest(pad_id, ticket=None, expected_head_hash=None)` → manifest (free on the daemon)
+- `locker_read_blocks(pad_id, ticket, from_block=0, to_block=0, expected_head_hash=None)` → blocks slice
 
 `locker_read_blocks` defaults to **block 0 (the envelope) first**, so a reader
 naturally starts with the envelope before requesting the rest.
@@ -255,8 +271,34 @@ hash chain in Python and return an explicit integrity block — the model never
 computes SHA-256 itself:
 
 ```json
-{"integrity": {"chain_valid": true, "blocks_verified": 2}}
+{"integrity": {"chain_valid": true, "blocks_verified": 2,
+               "payloads": "untrusted",
+               "expected_head": {"supplied": false, "checked": false, "matches": null,
+                                 "expected": null, "observed": "5f77fb57…", "detail": "…"},
+               "verdict": "internal_consistency_only"}}
 ```
+
+**Trusted-head verification.** `chain_valid` is *internal* consistency only, so a
+host that rewrites a pad's history and recomputes every hash produces a chain that
+still verifies. To detect that, pass `expected_head_hash` — a 64-character
+lowercase hex sha256 digest obtained from the writer over a **separately trusted
+channel**, commonly the `head_hash` returned by `locker_seal` or `locker_deposit` at
+seal time. The client recomputes the head from the chain it fetched and compares:
+
+```json
+{"integrity": {"chain_valid": true, "blocks_verified": 3,
+               "expected_head": {"supplied": true, "checked": true, "matches": true,
+                                 "expected": "9c1f…", "observed": "9c1f…", "detail": "…"},
+               "verdict": "trusted_head_match"}}
+```
+
+`verdict` states exactly what was established: `trusted_head_match`,
+`internal_consistency_only` (no reference supplied — **a full rewrite would not be
+detected**), `not_checked`, or `failed`. Supplying a malformed or mismatching head
+**fails verification and returns no payloads** (`error.kind == "verification_failed"`),
+and the daemon's own manifest head is never substituted for your reference. A match
+binds the content to *the reference you already trusted* — it does not establish
+writer identity, nor that the content is safe. See `SECURITY-PHASE3.md`.
 
 `chain_valid` reports internal consistency only; see *Integrity guarantees and
 their limits* above for what it does not prove.
