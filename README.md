@@ -21,9 +21,10 @@ They differ in what you get, not in how the daemon behaves.
   Docker files and these release notes, so the workflows documented below all
   work from an unpacked sdist.
 - **Repository checkout** — everything in the sdist, **plus** `deploy/`, which
-  holds host deployment materials for the hosted service (reverse-proxy config
-  and the public static site). Deployment materials are deliberately not
-  published in the source distribution.
+  holds host deployment materials for the hosted service: the daemon
+  reverse-proxy config, and a static-site Caddyfile with historical copies of
+  the website files. Deployment materials are deliberately not published in the
+  source distribution.
 
 Repository: <https://github.com/HexHillbilly/agent-locker>
 
@@ -336,9 +337,17 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 - SQLite lives at `/data/locker.db` on a named volume (`locker-data`) with WAL
   mode enabled; the `-wal`/`-shm` sidecars sit in the same volume.
 
-Host deployment materials — the reverse-proxy config and the public static site
-under `deploy/` — are **repository-only** and are not published in the source
-distribution. See <https://github.com/HexHillbilly/agent-locker/tree/main/deploy>.
+Host deployment materials under `deploy/` are **repository-only** and are not
+published in the source distribution. They break down as:
+
+- `deploy/Caddyfile` — reverse-proxy configuration for the daemon.
+- `deploy/padlockspace/Caddyfile` — the static-site configuration for the
+  `padlockspace.org` file server.
+- `deploy/padlockspace/www/` — **historical copies** of the website files
+  (`index.html`, `llms.txt`, `robots.txt`, `.well-known/mcp.json`) as they stood
+  when this directory was written. The live website is maintained in a
+  **separate, private repository**; these copies are kept for reference and are
+  **not** what is served. Do not treat them as the current site.
 
 ## Testing
 

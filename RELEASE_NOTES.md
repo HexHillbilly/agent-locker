@@ -58,3 +58,39 @@ Consequences, stated plainly:
   behaviour; both are ahead of what that host actually runs.
 
 No redeployment was performed or authorised.
+
+## 2026-10-08 — corrections to the 2026-10-07 observations
+
+Two corrections to the snapshot above. The original text is left in place: it is
+the record of what was believed on that date.
+
+- **The `llms.txt` claim was wrong.** The 2026-10-07 entry states that the
+  `llms.txt` served by the host "advertises the ticket endpoint and the `409`
+  behaviour". Read directly from the host, the file it served (1450 bytes)
+  listed six endpoints and contained **no** `POST /v1/pads/{id}/tickets`; the
+  only matches for "ticket" were the phrase "read ticket", the `read_ticket`
+  field of the create response, and the `?ticket=` query parameter. The file
+  that *does* advertise the ticket endpoint is this repository's own copy at
+  `deploy/padlockspace/www/llms.txt` (2754 bytes) — that copy, not the host, was
+  the source of the error.
+- **The static site is deployed.** The `https://padlockspace.org/` → `404` row
+  above was accurate on 2026-10-07 and is now stale. The site has since been
+  deployed. Its files are maintained in a **separate, private repository**; the
+  copies under `deploy/padlockspace/www/` are historical and are not what is
+  served.
+
+Re-observed on 2026-10-08, otherwise unchanged: `https://api.padlockspace.org/health`
+→ `200`, `version 0.1.0`; `/openapi.json` → 6 routes, **no**
+`/v1/pads/{pad_id}/tickets`; the demo pad reads `200` without a ticket.
+
+### A caution about the version string
+
+`/health` reports the package version, but a version number does not identify a
+commit. In this repository `0.1.0` spans several commits — the `v0.1.0` tag
+points at the commit that *introduced* `POST /v1/pads/{id}/tickets` — while the
+hosted instance reports `0.1.0` and does not expose that route. Which commit the
+host runs is therefore **not established** by its reported version; treat that
+number as a hint, not an identifier.
+
+No redeployment, version change, artifact rebuild, tag move, or runtime code
+change is part of this correction.
