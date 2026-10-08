@@ -5,7 +5,7 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
-## 0.1.3 — release candidate, prepared 2026-10-08
+## 0.1.3
 
 **Security fix.** Two behavioural changes in the MCP client; read them before upgrading.
 
@@ -52,10 +52,9 @@ data is migrated.
 
 ## 0.1.2 (2026-10-08)
 
-Changes since `0.1.1`. **Built and verified as a candidate; not tagged, not
-published to PyPI, not pushed to public GitHub, not deployed.** Retention and
-ticket-lifecycle policy is deliberately **not** included; that work waits on
-operator decisions and has no code in this release.
+Changes since `0.1.1`. Retention and ticket-lifecycle policy is deliberately
+**not** included; that work waits on operator decisions and has no code in this
+release.
 
 - **Trusted-head verification.** `locker_read_blocks` and `locker_manifest` accept
   an optional `expected_head_hash` — a 64-character lowercase hex sha256 digest the
