@@ -12,6 +12,27 @@ describes intended or expected behaviour, and no cell is a prediction.
 
 ---
 
+## 0. Guiding principles (operator, 2026-10-08)
+
+**[C]** Two principles constrain these decisions. They rule options out; they do not
+pick between the ones that remain.
+
+**P1 — Separate write expiry, read expiry, and deletion.** These are three different
+questions and they get three different answers. **[C] In particular, a TTL must not
+silently become permission to destroy data.** Today `expires_at` means "no more
+writes", and every pad already in the database carries a TTL that was agreed on that
+understanding. Reusing it as a deletion trigger would retroactively change the
+meaning of a value already stored, without the pad creator having agreed to it.
+Wherever an option below takes its trigger from `expires_at`, it is flagged **[P1]**.
+
+**P2 — Payment replay protection is independent of payload retention, and ticket
+expiry/revocation must be explicit.** A receipt lifetime has nothing to do with a
+payload lifetime, and nothing about deleting payloads may shorten the replay window.
+Ticket lifetimes must be stated and enforceable rather than implied by "it happens
+not to expire". Flagged **[P2]**.
+
+---
+
 ## 1. Current behaviour (from source)
 
 **[S]** Schema (`lockerd/db.py`, `SCHEMA`):
@@ -110,6 +131,7 @@ not define the intended outcome, this document does not pick one.
 | **Current [S]** | Reads ignore pad state entirely. A ticket is the only gate (the demo pad needs none). Expired pads remain readable. |
 | **Options** | **(a)** Keep as is — "expiry stops writes, not reads". **(b)** Refuse reads on `state='expired'` (403/410) while keeping sealed-after-TTL readable. **(c)** Refuse reads on any pad past `expires_at`, sealed or not. |
 | **Compatibility** | (a) none. (b) **breaking for anyone reading after TTL**; the demo pad and any audit workflow must be exempted or re-homed — the hosted instance's only public pad is the demo, which is sealed. (c) more so, and it contradicts the `sealed` guard by making TTL stronger than the seal. |
+| **Principle check [P1]** | This is the **read** expiry question. It is separate from 2.1's write expiry and from 2.5's deletion, and is answered on its own terms — not as a side effect of the TTL, and not as a step towards deletion. |
 | **Decision [C]** | Should an expired pad still be readable? The current answer is yes, which is currently **undocumented on the site** — the site says nothing about post-TTL read behaviour. Whatever is chosen must be reflected in `llms.txt`, or the same claim-vs-reality drift this workstream has been correcting will recur. |
 
 ### 2.3 Ticket activation and expiry
@@ -137,7 +159,8 @@ not define the intended outcome, this document does not pick one.
 | **Current [S]** | **None.** No `DELETE FROM`, no `VACUUM`. Payload bytes persist in `blocks.payload` for the lifetime of the database file. |
 | **Options** | **(a)** No deletion; expiry is a state flag only, and that is documented as such. **(b)** Delete block payloads (`UPDATE blocks SET payload=X''` or `DELETE FROM blocks`) N days after expiry, keeping `pads` and the chain hashes for audit. **(c)** Delete whole pads (blocks, tickets, receipts) after N days. |
 | **Compatibility / cost** | (a) leaves the storage question open forever and must never be described as a retention guarantee. (b) removes the bytes a reader may still want; the chain head stays but blocks no longer verify — a pad would then fail `chain_valid` rather than 404, which is a worse failure mode than refusing the read. (c) **conflicts with `foreign_keys = ON`**: `blocks`, `tickets` and `payment_receipts` all reference `pads(id)` with no `ON DELETE CASCADE`, so a pad row cannot be deleted while any of them exist — deletion requires an ordered multi-table transaction and a decision about receipts (see 2.6). |
-| **Decision [C]** | Whether deletion is wanted at all, and if so its trigger (age, state, explicit request) and what a reader sees afterwards. **[C] Do not implement before this is answered.** |
+| **Principle check [P1]** | **(b) and (c) take their trigger from expiry or age, which is exactly the silent conversion P1 forbids** — they would turn a stored write deadline into a destruction permission for pads created before the decision existed. If deletion is chosen, it needs a distinct, explicit basis: a separate retention field with its own default, or an explicit delete request from the write-key holder. **[C] Options (b)/(c) as written are ruled out by P1.** |
+| **Decision [C]** | Whether deletion is wanted at all, and if so its trigger (**on a basis other than the existing `expires_at`**) and what a reader sees afterwards. **[C] Do not implement before this is answered.** |
 
 ### 2.6 Payment-redemption record retention
 
@@ -146,7 +169,8 @@ not define the intended outcome, this document does not pick one.
 | **Current [S]** | `payment_receipts` rows are never deleted. `tx_hash` is the PK and the replay-prevention key. |
 | **Options** | **(a)** Keep receipts indefinitely (unbounded, small rows). **(b)** Retain receipts for a defined window and prune older ones. **(c)** Keep the key but relocate it to a compact `redeemed_tx_hashes` table, pruning the richer detail. |
 | **Compatibility / cost** | (a) unbounded growth of a table whose purpose is exactly replay prevention. (b)/(c) shrink the replay window: a tx hash older than the window becomes redeemable again. **[C]** The replay window must be at least as long as any challenge/authorization expiry plus the chain-reorg horizon of the settlement network, or an old proof becomes reusable. **[U]** That horizon is not established here and needs its own evidence. |
-| **Decision [C]** | The required replay window. **[C] Receipts must not be purged merely because payloads expired — the two have unrelated lifetimes and the receipt is what stops a second redemption.** |
+| **Principle check [P2]** | Receipt retention is governed by the settlement network's replay horizon and any authorization/challenge expiry — **never** by payload lifetime. **[C] Deleting payloads must not delete or shorten receipts.** |
+| **Decision [C]** | The required replay window, on evidence rather than convenience. **[C] Receipts must not be purged merely because payloads expired — the two have unrelated lifetimes and the receipt is what stops a second redemption.** |
 
 ### 2.7 Backup retention implications
 
@@ -212,6 +236,8 @@ configurable at mint time; **(c)** revocable (2.4(a)) without expiry; **(d)** bo
 **[C] Decision required.** This is the single highest-consequence lifecycle
 question: an unlimited ticket on a pad that (for any reason) becomes readable again
 is a permanent read capability, and there is currently no way to withdraw it.
+**[P2]** Whichever is chosen must be *explicit and enforceable* — a ticket lifetime
+that is permanent only because nothing checks it is not a stated lifetime.
 
 ### 3.4 Limits for deployments permitting writes
 

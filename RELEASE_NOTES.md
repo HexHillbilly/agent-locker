@@ -8,8 +8,8 @@ goes stale faster than the code does.
 ## 0.1.2rc1 — release candidate, unreleased
 
 Changes since `0.1.1`. **Pre-release candidate: not tagged, not published, not
-deployed.** Retention and ticket-lifecycle policy (Phase 4) is deliberately **not**
-included; that work waits on operator decisions.
+deployed.** Retention and ticket-lifecycle policy is deliberately **not** included;
+that work waits on operator decisions and has no code in this release.
 
 - **Trusted-head verification.** `locker_read_blocks` and `locker_manifest` accept
   an optional `expected_head_hash` — a 64-character lowercase hex sha256 digest the
