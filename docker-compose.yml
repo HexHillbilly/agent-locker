@@ -2,11 +2,30 @@ services:
   lockerd:
     build: .
     ports:
-      - "8000:8000"
+      # LOOPBACK ONLY. The daemon is not designed to be exposed directly.
+      #
+      # "8000:8000" binds the wildcard address on IPv4 *and* IPv6, so any
+      # control at a proxy in front of it is bypassable by talking to the
+      # origin port directly. Binding 127.0.0.1 removes that path.
+      #
+      # This file therefore does not serve remote clients. Publishing the
+      # daemon beyond this host requires a deliberately configured reverse
+      # proxy or another intentional deployment arrangement that terminates
+      # TLS, enforces the public surface you intend, and forwards to
+      # 127.0.0.1:8000. What that proxy allows is a deployment decision: this
+      # package ships no proxy configuration and assumes none.
+      - "127.0.0.1:8000:8000"
     volumes:
+      # Named volume: pad data lives here. Never use `docker compose down -v`,
+      # which would delete it. Nothing in the daemon deletes payloads, and
+      # nothing in it promises to; see the lifecycle section of README.md.
       - locker-data:/data
     environment:
       LOCKER_DB_PATH: /data/locker.db
+      # 'local' is a legacy alias for 'open' (see lockerd/config.py
+      # normalize_mode) — no payment enforcement. Keep payment enforcement off
+      # on any publicly reachable instance until the payment-binding work is
+      # complete.
       LOCKER_MODE: local
     restart: unless-stopped
 

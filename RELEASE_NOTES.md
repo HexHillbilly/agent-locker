@@ -5,11 +5,12 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
-## 0.1.2rc1 — release candidate, unreleased
+## 0.1.2 — prepared, not yet published
 
-Changes since `0.1.1`. **Pre-release candidate: not tagged, not published, not
-deployed.** Retention and ticket-lifecycle policy is deliberately **not** included;
-that work waits on operator decisions and has no code in this release.
+Changes since `0.1.1`. **Built and verified as a candidate; not tagged, not
+published to PyPI, not pushed to public GitHub, not deployed.** Retention and
+ticket-lifecycle policy is deliberately **not** included; that work waits on
+operator decisions and has no code in this release.
 
 - **Trusted-head verification.** `locker_read_blocks` and `locker_manifest` accept
   an optional `expected_head_hash` — a 64-character lowercase hex sha256 digest the
@@ -51,6 +52,19 @@ that work waits on operator decisions and has no code in this release.
 - **Payloads are framed as untrusted.** Tool descriptions, server instructions and
   every returned integrity block state that payloads are data, not instructions,
   and that chain consistency establishes neither authorship nor truth.
+- **The shipped Compose file no longer publishes the daemon to the world.** It
+  bound `"8000:8000"` — the wildcard address on IPv4 *and* IPv6 — which makes any
+  control at a proxy in front of the daemon bypassable by talking to the origin
+  port directly. It now binds `127.0.0.1:8000:8000`. Remote clients are therefore
+  not served by that file: publishing the daemon beyond its host requires a
+  deliberately configured reverse proxy or another intentional deployment
+  arrangement, which is a deployment decision rather than a shipped default.
+- **Lifecycle behaviour is now documented rather than implied.** `README.md`
+  states what expiry does and does not do (write expiry stops writes and neither
+  stops reads nor authorizes deletion), that sealing closes a pad to appends and
+  is **not** a promise of permanent storage, that nothing in the daemon deletes
+  payloads, that payment receipts are retained indefinitely as the replay key, and
+  that deleting from a live database does not delete from backups or WAL.
 - **No hash-format change.** `curr_hash = sha256(prev_hash ++ payload_bytes)` is
   untouched in this release, and the hash functions are not modified.
 

@@ -48,7 +48,7 @@ lockermcp          # MCP server (stdio)
 ### B. From the source distribution
 
 ```bash
-tar xzf lockermcp-0.1.2rc1.tar.gz && cd lockermcp-0.1.2rc1
+tar xzf lockermcp-0.1.2.tar.gz && cd lockermcp-0.1.2
 python -m venv .venv && source .venv/bin/activate
 pip install .
 ```
@@ -111,9 +111,9 @@ use the installed entry point directly:
 | GET    | `/v1/pads/{id}/blocks` | `Authorization: Bearer <read_ticket>` (or `?ticket=`) | bounded slice of blocks |
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
 
-`demo-pad-v1` is a permanent read-only pad seeded on startup; its blocks are
-readable without a ticket (`GET /v1/pads/demo-pad-v1/blocks`). Its published
-test write key is `demo-write-key` — writing to it returns `409 Conflict`.
+`demo-pad-v1` is a read-only pad re-seeded on startup; its blocks are readable
+without a ticket (`GET /v1/pads/demo-pad-v1/blocks`). Its published test write key
+is `demo-write-key` — writing to it returns `409 Conflict`.
 
 ## Handoff envelope (block 0)
 
@@ -267,17 +267,57 @@ mid-session (403) can also leave a read uncompletable.
 
 - **write_key** — returned once at creation; only its sha256 hash is stored.
   `append`/`seal` verify `sha256(presented_key) == write_key_hash`.
-- **read_once = a read lease.** The first successful `/blocks` read opens a
-  window (default 10 minutes, `LOCKER_READ_LEASE_SECONDS`). Reads inside the
-  window are unlimited; after it, the ticket returns 403. This lets a reader
-  grab block 0 (the envelope) first and then the remaining blocks without
-  burning the ticket.
-- **read_unlimited** — minted via `POST /v1/pads/{id}/tickets` with the write
+- **Time-bounded read lease** — wire and database value `read_once`, which is a
+  legacy name for what is really a lease window. The value is unchanged in the
+  API and the schema; only the documentation calls it what it does. The first
+  successful `/blocks` read opens a window of `LOCKER_READ_LEASE_SECONDS`
+  (default 600 s). Reads **inside** the window are unlimited; after it the ticket
+  returns 403 `exhausted`. This lets a reader take block 0 (the envelope) and
+  then the remaining blocks without burning the ticket.
+- **`read_unlimited`** — minted via `POST /v1/pads/{id}/tickets` with the write
   key (`{"type": "read_unlimited"}`); it carries no lease window, so a reviewer
-  can re-read a sealed pad after the pad's TTL or after a `read_once` lease has
-  lapsed. `{"type": "read_once"}` mints another leased ticket. Tickets are
-  scoped to their pad.
+  can re-read a sealed pad after the pad's TTL or after a lease has lapsed.
+  `{"type": "read_once"}` mints another leased ticket. Tickets are scoped to
+  their pad.
 - `manifest` is free (public metadata) and does not touch the lease.
+
+Stated plainly, because these are the parts a caller is most likely to assume
+wrong:
+
+- **The lease is the only time limit there is.** `read_unlimited` never expires,
+  and **no ticket can be revoked** — there is no revoke endpoint and no
+  revocation column. Treat a minted ticket as valid until its lease lapses, or
+  indefinitely if it is unlimited.
+- **The configured lease duration is not exposed.** No response reports
+  `LOCKER_READ_LEASE_SECONDS`, and there is no way to ask a particular ticket when
+  its window opened or when it closes. Both are deferred work, not oversights to
+  rely on.
+
+## Lifecycle: what expires, what does not, and what is never deleted
+
+**[C] Described, not promised.** These are the behaviours of this build. Nothing
+here is a durability guarantee, and nothing in the daemon deletes data.
+
+- **Write expiry.** `expires_at` is fixed at creation from the requested
+  `ttl_seconds` (capped at 30 days). Past it, an **open** pad becomes `expired` on
+  its next access, and `append`/`seal` return **410 Gone**. Expiry is evaluated on
+  access; there is no background sweeper.
+- **Sealing.** `seal` closes a pad to further appends. **It is not a promise of
+  permanent storage or availability**, and it does not change what expiry means.
+  A sealed pad is never marked expired.
+- **Reads.** Write expiry does **not** stop reads and does **not** authorize
+  deletion. Reads are gated by ticket policy alone: an expired pad, and a sealed
+  pad long past its TTL, both stay readable while a valid ticket exists.
+- **Deletion.** None. There is no payload `DELETE` anywhere in the daemon and no
+  `VACUUM`. Payload bytes persist in the database file until an operator removes
+  them by some means of their own. `expired` is a state flag, **not** a retention
+  outcome and **not** a deletion trigger.
+- **Payment receipts.** Retained indefinitely. `tx_hash` is the primary key and
+  the replay-prevention key; deleting payloads must never delete or shorten it.
+- **Backups.** Operator-managed and outside the daemon. Deleting data from a live
+  database does **not** delete it from a backup, from WAL segments, from free
+  pages, or from the volume that holds a copy. No backup deletion or
+  secure-erasure promise exists here.
 
 ## Payments (txid)
 
@@ -425,6 +465,15 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
   compile on musl), runs as a non-root `locker` user.
 - SQLite lives at `/data/locker.db` on a named volume (`locker-data`) with WAL
   mode enabled; the `-wal`/`-shm` sidecars sit in the same volume.
+- The compose file publishes the daemon on **`127.0.0.1:8000` only**. `"8000:8000"`
+  binds the wildcard address on IPv4 *and* IPv6, which makes anything placed in
+  front of the daemon bypassable by talking to the origin port directly.
+  **Remote clients are therefore not served by that file.** Publishing the daemon
+  beyond its host requires a deliberately configured reverse proxy or another
+  intentional deployment arrangement that terminates TLS, enforces the public
+  surface you intend, and forwards to `127.0.0.1:8000`. What that proxy allows is
+  a deployment decision — this package ships no proxy configuration and assumes
+  none.
 
 Host deployment materials under `deploy/` are **repository-only** and are not
 published in the source distribution. They break down as:
