@@ -213,6 +213,32 @@ remote success needs a stated contract before code exists. The shape to decide:
   data (nothing migrated), the per-block and per-pad limits, the trusted-head /
   representation / fail-closed behaviour from 0.1.3.
 
+## 4a. Website wording — nothing to change yet, delta recorded
+
+**[C] No website change is necessary to keep claims accurate, and none was made.** Every
+version claim on the live site is about the **published** package, which is still 0.1.3
+(`llms.txt`: "the published package `lockermcp` 0.1.3", "## Published package 0.1.3: full
+API"). 0.1.4 is not published, so asserting it would be false. No branch was created that
+would say otherwise.
+
+**[S] The hosted 0.1.0 demo is described accurately and is not exposed to Finding A.** The
+site already states that `api.padlockspace.org` is read-only, serving `GET`/`HEAD` on
+three paths only and returning `403` for every write target. With no writes, the
+acknowledged-write race has nothing to lose; the containment already documented is what
+protects it.
+
+**Prepared delta, for the day 0.1.4 is published** (not applied):
+
+- `llms.txt` line 14 — "the published package `lockermcp` 0.1.3" → **0.1.4**
+- `llms.txt` line 70 — `## Published package 0.1.3: full API` → **0.1.4**
+- `llms.txt` line ~104 "Hard limits" — add the request-body cap that 0.1.4 introduces:
+  4 KB of JSON body on `POST /v1/pads` and `POST /v1/pads/{id}/tickets`. The other limits
+  in that line (64 KB per block, 256 KB per pad, 64 KB per slice) are unchanged.
+- optionally, a sentence noting the daemon-side fix: a concurrent `/health` no longer
+  participates in other requests' transactions, and sealing now verifies the stored chain
+  first.
+- `index.html` needs **no** change: it names no published version.
+
 ## 5. Remaining risks and operator mitigation
 
 - **[C] Existing stores may already contain lost writes**, and nothing in this release
