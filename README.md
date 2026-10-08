@@ -12,8 +12,8 @@ no external services.
 
 They differ in what you get, not in how the daemon behaves.
 
-- **Installed package** — `pip install lockermcp` (or, once published, `uvx
-  lockermcp`). Installs the two importable packages and the `lockerd` /
+- **Installed package** — `pip install lockermcp`, or `uvx lockermcp` to run it
+  without installing. Provides the two importable packages and the `lockerd` /
   `lockermcp` console scripts. No example scripts, no tests, no Docker or
   deployment files.
 - **Source distribution** — the `.tar.gz` on the package index. Adds the test
@@ -29,18 +29,14 @@ Repository: <https://github.com/HexHillbilly/agent-locker>
 
 ## Install
 
-### A. Installed package (intended path — pending publication)
+### A. Installed package
 
 ```bash
 uvx lockermcp                      # MCP server (stdio)
 uvx --from lockermcp lockerd       # daemon
 ```
 
-**Status: prepared, not published.** The current candidate is version `0.1.1`.
-It has been built and verified locally from a committed source export, but it
-has **not** been uploaded to PyPI, so `uvx lockermcp` does not resolve today.
-Read this section as the intended path, not as a verified one, until a release
-appears on the index. Once published, the equivalent non-uvx form is:
+The same two commands are available after a normal installation:
 
 ```bash
 pip install lockermcp
@@ -95,8 +91,8 @@ configuration is `LOCKER_URL`, the daemon's base URL.
 
 `mcp_config.example.json` (in the source distribution and the checkout) is that
 block verbatim. Register it with Claude Code / Cursor / Open WebUI via the stdio
-`mcpServers` block. Before a release is published, substitute the locally
-installed entry point for the `uvx` form:
+`mcpServers` block. If the package is installed rather than fetched by `uvx`,
+use the installed entry point directly:
 
 ```json
 { "command": "lockermcp", "args": [], "env": { "LOCKER_URL": "http://127.0.0.1:8000" } }
