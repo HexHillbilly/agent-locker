@@ -21,9 +21,17 @@ class DaemonError(Exception):
         super().__init__(detail)
 
 
-def get(url: str):
+def get(url: str, token: str | None = None):
+    """GET *url*, optionally presenting *token* as a Bearer credential.
+
+    The ticket travels in the Authorization header, never in the URL, so it
+    cannot be captured by a proxy log or echoed in an error message.
+    """
+    req = urllib.request.Request(url)
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(url, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=10) as r:
             return json.loads(r.read() or b"{}")
     except urllib.error.HTTPError as e:
         raise DaemonError(e.code, (e.read().decode() or e.reason))
@@ -37,9 +45,9 @@ def fetch_blocks(base: str, pad_id: str, ticket: str, block_count: int):
     start = 0
     while start < block_count:
         end = min(start + chunk - 1, block_count - 1)
-        url = f"{base}/v1/pads/{pad_id}/blocks?ticket={ticket}&from={start}&to={end}"
+        url = f"{base}/v1/pads/{pad_id}/blocks?from={start}&to={end}"
         try:
-            resp = get(url)
+            resp = get(url, token=ticket)
         except DaemonError as e:
             if e.status == 413 and chunk > 1:
                 chunk = max(1, chunk // 2)

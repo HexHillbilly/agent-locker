@@ -108,7 +108,7 @@ use the installed entry point directly:
 | POST   | `/v1/pads/{id}/seal` | `Bearer <write_key>` | freeze the pad, revoke writes |
 | POST   | `/v1/pads/{id}/tickets` | `Bearer <write_key>` | mint an extra read ticket (`read_once` / `read_unlimited`) |
 | GET    | `/v1/pads/{id}/manifest` | none (free) | state, block count, bytes, sealed_at, head hash |
-| GET    | `/v1/pads/{id}/blocks` | `?ticket=<read_ticket>` | bounded slice of blocks |
+| GET    | `/v1/pads/{id}/blocks` | `Authorization: Bearer <read_ticket>` (or `?ticket=`) | bounded slice of blocks |
 | GET    | `/health` | none | liveness: 200 ok / 503 if DB read-only |
 
 `demo-pad-v1` is a permanent read-only pad seeded on startup; its blocks are
@@ -307,12 +307,13 @@ reproducible.
 
 | Env var | Default | Meaning |
 |---------|---------|---------|
-| `LOCKER_MODE` | `open` | `open` (no payment; aliases `local`/`dev`) or `txid` (Base USDC receipt check; alias `x402`) |
+| `LOCKER_MODE` | `open` | `open` (no payment; aliases `local`/`dev`) or `txid` (Base USDC receipt check; alias `x402`). An explicitly supplied value that is none of these **stops the daemon** rather than defaulting |
 | `LOCKER_DB_PATH` | `locker.db` | SQLite file path |
 | `LOCKER_HOST` | `127.0.0.1` | bind host (`lockerd`) |
 | `LOCKER_PORT` | `8000` | bind port (`lockerd`) |
 | `LOCKER_READ_LEASE_SECONDS` | `600` | read_once lease window |
 | `LOCKER_URL` | `http://127.0.0.1:8000` | daemon URL for `lockermcp` (**required** for the MCP server) |
+| `LOCKER_TICKET_TRANSPORT` | `header` | how `lockermcp` presents a read ticket: `header` sends `Authorization: Bearer <ticket>`; `query` uses the legacy `?ticket=` URL form. Unknown values raise |
 | `PAYMENT_WALLET_ADDRESS` | (unset) | receiving EVM address (required in txid mode) |
 | `BASE_RPC_URL` | `https://mainnet.base.org` | Base JSON-RPC endpoint |
 | `REQUIRED_USDC_UNITS` | `2000` | minimum payment (USDC units, 6 decimals) |
