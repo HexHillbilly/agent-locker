@@ -213,9 +213,18 @@ reported as a verified read. It is not cryptographically bound, so it constrains
 lying host without proving anything on its own.
 
 **3. Fields excluded from the hash — pure server assertions.** Per block:
-`content_type`, `created_at`. In the manifest: `state`, `total_bytes`, `sealed_at`,
-`created_at`, `expires_at`. Nothing verifies these and none is an input to
-verification. Treat them as claims about the pad, not facts about it.
+`content_type` and `created_at`. In the manifest: `state`, `total_bytes`,
+`sealed_at`, `created_at`, `expires_at`. Nothing verifies these and none is an input
+to verification; treat them as claims about the pad, not facts about it.
+
+**[C] The MCP reader no longer returns `content_type` at all.** It rode along with
+verified content while the hash never covered it, and it is a *processing
+instruction* — a value like `text/html` beside a verified payload invites a caller to
+treat verified bytes as active content. It is removed rather than replaced:
+substituting an asserted type would be the same mistake pointing the other way. The
+daemon's stored value and its HTTP block schema are unchanged; only the MCP
+reader's presentation changed. Callers needing the type must fetch it from the daemon
+themselves and treat it as unverified.
 
 **4. Server assertions that *drive* verification — inputs, therefore not verified by
 it.** `block_count` decides how many blocks are fetched; the manifest's `head_hash`
@@ -377,6 +386,15 @@ seal time. The client recomputes the head from the chain it fetched and compares
                                  "expected": "9c1f…", "observed": "9c1f…", "detail": "…"},
                "verdict": "trusted_head_match"}}
 ```
+
+**[C] A chain that is not internally consistent fails closed, anchored or not.** If a
+block's recorded hashes do not match the bytes it carries, both read tools return
+`error.kind = "verification_failed"` with `cause: "chain_inconsistent"` and **no
+payload at all**. Previously an unanchored read of a broken chain returned the blocks
+with `verdict: failed` and no error, which handed tampered payloads to any caller that
+did not read the integrity block. That was an intentional contract change in this
+release: a caller should not have to inspect a metadata field to avoid consuming
+tampered content. See `SECURITY-POST-0.1.2.md`.
 
 `verdict` states exactly what was established: `trusted_head_match`,
 `internal_consistency_only` (no reference supplied — **a full rewrite would not be

@@ -3,7 +3,8 @@
 Planner initializes a pad, writes a strict Block 0 envelope + Block 1 payload,
 and seals. Worker reads the manifest, envelope (inspects constraints), payload,
 and asserts chain_valid == True. Also checks: post-seal write is rejected,
-read-lease expiry is enforced, and a tampered block breaks the chain.
+read-lease expiry is enforced, and a tampered block makes the read fail closed
+(verification_failed, no payload) rather than returning tampered content.
 
 Run with the project venv:  .venv/bin/python scripts/test_handoff_e2e.py
 Starts its own daemon on a free port unless LOCKER_URL is set.
@@ -163,7 +164,14 @@ async def main() -> None:
     print(f"[worker] chain_valid=True; constraints={envelope['constraints']}; "
           f"payload={block1['payload_utf8']!r}")
 
-    # Tamper: corrupt block 1 in the DB, worker re-read must fail the chain.
+    # Tamper: corrupt block 1 in the DB. The re-read must fail CLOSED.
+    #
+    # [C] This assertion was previously the opposite: the tampered read returned the
+    # blocks with chain_valid=False and no top-level error, which preserved the
+    # pre-0.1.2 response contract. That contract delivered tampered payloads to any
+    # caller that did not inspect the integrity block. Chain verification failures
+    # now return an error and no payload, anchored or not. The expectation is
+    # updated rather than the unsafe output preserved to keep this test green.
     assert dbpath, "tamper check needs a local DB"
     conn = sqlite3.connect(dbpath)
     conn.execute("UPDATE blocks SET payload=? WHERE pad_id=? AND seq=1",
@@ -175,12 +183,18 @@ async def main() -> None:
     async with stdio_client(mcp_params(url)) as (r, w):
         async with ClientSession(r, w) as session:
             await session.initialize()
-            # still inside the read lease -> must verify FALSE now
+            # still inside the read lease -> must fail closed now
             env = await call_tool(session, "locker_read_blocks",
                                   {"pad_id": handoff["pad_id"], "ticket": handoff["read_ticket"]})
-            assert env["integrity"]["chain_valid"] is False
-            print(f"[tamper] chain_valid=False (blocks_verified="
-                  f"{env['integrity']['blocks_verified']}) — tamper detected")
+            err = env.get("error")
+            assert err, f"tampered read returned a result instead of an error: {env}"
+            assert err["kind"] == "verification_failed", err
+            assert err["cause"] == "chain_inconsistent", err
+            assert "blocks" not in env, "a tampered read returned payloads"
+            assert env["integrity"]["verdict"] == "failed"
+            assert "tampered" not in json.dumps(env), "the error echoed the tampered payload"
+            print(f"[tamper] verification_failed (cause={err['cause']}) — no payload "
+                  f"returned, tamper detected")
 
             # then let the lease expire and confirm reads are rejected
             print(f"[lease] sleeping {LEASE_SECONDS + 1}s to expire the read lease...")

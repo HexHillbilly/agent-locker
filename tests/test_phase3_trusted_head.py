@@ -287,23 +287,33 @@ def test_untouched_sealed_chain_with_the_correct_expected_head_passes(live_daemo
 # required regression 2 — payload altered without rehashing fails internally
 # --------------------------------------------------------------------------- #
 
-def test_payload_alteration_without_rehashing_fails_internal_consistency(live_daemon, rehost):
+def test_payload_alteration_without_rehashing_fails_closed(live_daemon, rehost):
+    """A chain broken by an un-rehashed alteration returns no content at all.
+
+    **[C] This test previously asserted the opposite** — that the blocks came back
+    with ``chain_valid: false`` and no top-level error — to preserve the pre-0.1.2
+    response contract. That contract handed tampered payloads to any caller that did
+    not read the integrity block, and has been intentionally changed: chain
+    verification failures now fail closed with or without an expected head. See
+    ``tests/test_post_012_findings.py`` and ``SECURITY-POST-0.1.2.md``.
+    """
     pad_id, ticket, true_head = _pad(live_daemon, [b"pay Alice 10 USDC"])
     host = rehost(pad_id, ticket, seq=1, new_payload=b"pay Mallory 9999 USDC", rehash=False)
     mcp.LOCKER_URL = host.base
 
     r = mcp.locker_read_blocks(pad_id, ticket, from_block=0, to_block=9)
-    integ = r["integrity"]
-    assert integ["chain_valid"] is False
-    assert integ["blocks_verified"] == 1          # broke at the altered block
-    assert integ["verdict"] == mcp.VERDICT_FAILED
-    assert r["blocks"][0]["curr_hash"]                 # block 0 still returned
-    assert b"Mallory" in base64.b64decode(r["blocks"][1]["payload_b64"])
+    assert "error" in r, r
+    assert r["error"]["kind"] == "verification_failed"
+    assert r["error"]["cause"] == "chain_inconsistent"
+    assert r["integrity"]["verdict"] == mcp.VERDICT_FAILED
+    assert "blocks" not in r
+    assert "Mallory" not in json.dumps(r)
 
-    # And a correct expected head must not rescue it.
+    # A correct expected head does not change the outcome.
     r2 = mcp.locker_read_blocks(pad_id, ticket, expected_head_hash=true_head)
     assert "error" in r2
     assert r2["error"]["kind"] == "verification_failed"
+    assert r2["error"]["cause"] == "chain_inconsistent"
     assert "blocks" not in r2
 
 
