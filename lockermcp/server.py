@@ -95,6 +95,22 @@ class PaymentRequired(LockerError):
         self.challenge = challenge
 
 
+class VerificationFailure(LockerError):
+    """The read could not be completed as a verification. Fails closed.
+
+    Raised before any result is assembled, so a partial, inconsistent, or
+    misrepresented retrieval can never be reported as a successful verified read.
+
+    ``cause`` is a stable machine-readable discriminator; ``reason`` is the human
+    detail. Both travel out in the error object.
+    """
+
+    def __init__(self, reason: str, cause: str):
+        super().__init__(0, reason)
+        self.reason = reason
+        self.cause = cause
+
+
 def _err(e: LockerError) -> dict:
     """Daemon errors come back as a structured error dict, not a raised exception."""
     if isinstance(e, PaymentRequired):
@@ -177,12 +193,15 @@ def _expected_head_format_error(value: Any) -> str | None:
     return None
 
 
-def _expected_head_state(expected: str | None, observed: str | None) -> tuple[dict, str | None]:
+def _expected_head_state(
+    expected: str | None, observed: str | None
+) -> tuple[dict, tuple[str, str] | None]:
     """Evaluate the caller-supplied expected head.
 
-    Returns ``(block, failure_reason)``. ``failure_reason`` is non-``None`` when
-    the caller asked for a comparison that could not be completed or did not
-    hold, and such a result must not report success.
+    Returns ``(block, failure)`` where ``failure`` is ``None`` or a
+    ``(cause, reason)`` pair. A non-``None`` failure means the caller asked for a
+    comparison that could not be completed or did not hold, and such a result
+    must not report success.
 
     Kept separate from ``chain_valid``: that field reports *internal* chain
     consistency, while this block reports comparison against a reference the
@@ -212,7 +231,7 @@ def _expected_head_state(expected: str | None, observed: str | None) -> tuple[di
             "expected": expected,
             "observed": observed,
             "detail": fmt,
-        }, fmt
+        }, ("malformed_expected_head", fmt)
 
     if observed is None:
         return {
@@ -226,8 +245,9 @@ def _expected_head_state(expected: str | None, observed: str | None) -> tuple[di
                 "confirmed and the expected head could not be checked against one."
             ),
         }, (
+            "chain_inconsistent",
             "the chain is not internally consistent, so the expected head could not "
-            "be confirmed against any computed head"
+            "be confirmed against any computed head",
         )
 
     matches = expected == observed
@@ -245,7 +265,10 @@ def _expected_head_state(expected: str | None, observed: str | None) -> tuple[di
             "expected head. The chain was rewritten, rehashed, truncated, or the "
             "reference belongs to different content."
         ),
-    }, None if matches else "the computed chain head does not match the supplied expected head"
+    }, None if matches else (
+        "expected_head_mismatch",
+        "the computed chain head does not match the supplied expected head",
+    )
 
 
 def _verdict(chain_valid, expected: dict) -> str:
@@ -279,45 +302,112 @@ def _integrity(chain_valid, verified: int, expected_head: dict | None = None) ->
     }
 
 
-def _verification_failure(reason: str, integrity: dict, pad_id: str) -> dict:
-    """A failed trusted-head check. Never returns payloads.
+def _verification_failure(reason: str, integrity: dict, pad_id: str,
+                          cause: str = "verification_failed") -> dict:
+    """A failed verification. Never returns payloads.
 
     Uses the existing error shape so a caller — or a model — that inspects only
     ``error`` cannot mistake the result for a successful verified read. The
-    integrity block is retained alongside it purely for diagnosis.
+    verdict is forced to ``failed`` here, so no failure return can carry a
+    success verdict whatever the caller passed in. ``cause`` is a stable
+    discriminator; the integrity block is retained purely for diagnosis.
     """
     return {
         "error": {
             "status": 0,
             "kind": "verification_failed",
+            "cause": cause,
             "detail": f"verification failed: {reason}",
         },
         "pad_id": pad_id,
-        "integrity": integrity,
+        "integrity": {**integrity, "verdict": VERDICT_FAILED},
     }
 
 
+def _b64_to_bytes(value: Any) -> bytes:
+    """Decode one block's payload. ``payload_b64`` is the hashed representation."""
+    if not isinstance(value, str):
+        raise VerificationFailure(
+            f"a block payload was not a base64 string ({type(value).__name__})",
+            "inconsistent_blocks")
+    try:
+        return base64.b64decode(value, validate=True)
+    except Exception:
+        raise VerificationFailure(
+            "a block payload was not valid base64", "inconsistent_blocks") from None
+
+
+def _utf8_or_none(payload: bytes) -> str | None:
+    """The documented decoding rule for returned text: strict UTF-8, else ``None``.
+
+    Mirrors the daemon's own ``_try_utf8`` exactly, so an honest daemon always
+    agrees with the locally derived value (checked against the hosted 0.1.0
+    instance: ``payload_utf8 == strict_utf8(payload_b64)`` for every demo block).
+    A disagreement therefore means the host presented a representation that does
+    not match the bytes it served — which fails closed rather than being smoothed
+    over.
+    """
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _client_block(block: dict, payload: bytes) -> dict:
+    """The block as returned to the caller.
+
+    ``payload_utf8`` is recomputed here from the payload bytes the client
+    verified, so returned text is by construction a function of verified bytes —
+    never the server's parallel claim. That claim is compared against the locally
+    derived value, and a mismatch fails closed. ``payload_b64`` is preserved
+    exactly as served.
+    """
+    local = _utf8_or_none(payload)
+    if "payload_utf8" in block and block.get("payload_utf8") != local:
+        raise VerificationFailure(
+            f"block {block.get('seq')!r}: the text the daemon presented does not match "
+            "the payload bytes it served. Refusing to return a representation that "
+            "disagrees with the verified bytes.",
+            "representation_mismatch")
+    return {**block, "payload_utf8": local, "payload_utf8_source": "client-derived"}
+
+
 def _fetch_and_verify_chain(pad_id: str, ticket: str):
-    """Walk the full chain genesis -> head.
+    """Walk the full chain genesis -> head, or fail closed.
 
     Returns ``(chain_valid, blocks_verified, blocks, manifest, observed_head)``.
+
+    Fails closed — raises :class:`VerificationFailure` — on anything that means
+    the read could not actually be completed: a manifest whose ``block_count`` is
+    unusable, a page returning fewer blocks than were asked for, a
+    ``total_blocks`` that disagrees with the manifest or changes between pages, a
+    response for a different pad, a block whose ``seq`` is not its position, a
+    payload that will not decode, or presented text that disagrees with the bytes
+    served. A partial or inconsistent retrieval is never reported as a successful
+    verified read.
 
     ``observed_head`` is the head this client computed from the chain, or
     ``None`` when the chain is not internally consistent (a broken chain has no
     confirmable head). It is never taken from the daemon's manifest.
 
-    Payload bytes are passed through exactly as the daemon returned them: this
-    function verifies, it never rewrites user content.
+    Payload bytes are preserved exactly as served; returned text is derived
+    locally from them.
     """
     manifest = _request("GET", f"/v1/pads/{pad_id}/manifest")
     block_count = manifest["block_count"]
     head_hash = manifest["head_hash"]
+    if isinstance(block_count, bool) or not isinstance(block_count, int) or block_count < 0:
+        raise VerificationFailure(
+            f"the manifest reported an unusable block_count ({block_count!r}); "
+            "refusing to verify against it", "incomplete_retrieval")
 
-    blocks = []
+    raw: list[dict] = []
     chunk = 256
     start = 0
+    seen_total = None
     while start < block_count:
         end = min(start + chunk - 1, block_count - 1)
+        want = end - start + 1
         try:
             resp = _fetch_blocks_page(pad_id, ticket, start, end)
         except LockerError as e:
@@ -325,20 +415,55 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
                 chunk = max(1, chunk // 2)  # page shrank past the 64 KB response cap
                 continue
             raise
-        blocks.extend(resp["blocks"])
+        if resp.get("pad_id") not in (None, pad_id):
+            raise VerificationFailure(
+                f"the daemon answered for pad {resp.get('pad_id')!r} while "
+                f"{pad_id!r} was requested", "inconsistent_blocks")
+        total = resp.get("total_blocks")
+        if isinstance(total, int) and not isinstance(total, bool):
+            if seen_total is None:
+                seen_total = total
+            elif total != seen_total:
+                raise VerificationFailure(
+                    f"the daemon reported total_blocks changing between pages "
+                    f"({seen_total} then {total})", "inconsistent_blocks")
+        got = resp.get("blocks") or []
+        if len(got) != want:
+            raise VerificationFailure(
+                f"incomplete retrieval: asked for blocks {start}..{end} ({want}) and "
+                f"received {len(got)}; refusing to verify a partial chain",
+                "incomplete_retrieval")
+        raw.extend(got)
         start = end + 1
+
+    if len(raw) != block_count:
+        raise VerificationFailure(
+            f"incomplete retrieval: the manifest reported {block_count} blocks and "
+            f"{len(raw)} were retrieved", "incomplete_retrieval")
+    if seen_total is not None and seen_total != block_count:
+        raise VerificationFailure(
+            f"the manifest reported block_count={block_count} but the daemon's "
+            f"block list reports total_blocks={seen_total}", "inconsistent_blocks")
 
     prev = ZERO_HASH
     verified = 0
     chain_valid = True
-    for b in blocks:
-        payload = base64.b64decode(b["payload_b64"])
+    blocks = []
+    for index, b in enumerate(raw):
+        if b.get("seq") != index:
+            raise VerificationFailure(
+                f"the block at position {index} reports seq={b.get('seq')!r}; the "
+                "chain is not a contiguous 0-based sequence", "inconsistent_blocks")
+        payload = _b64_to_bytes(b.get("payload_b64"))
+        blocks.append(_client_block(b, payload))
+        if not chain_valid:
+            continue
         expect = hashlib.sha256(prev.encode() + payload).hexdigest()
-        if b["prev_hash"] != prev or b["curr_hash"] != expect:
+        if b.get("prev_hash") != prev or b.get("curr_hash") != expect:
             chain_valid = False
-            break
-        prev = b["curr_hash"]
-        verified += 1
+        else:
+            prev = b["curr_hash"]
+            verified += 1
 
     if chain_valid and prev != head_hash:
         chain_valid = False  # chain did not reach the advertised head hash
@@ -463,7 +588,8 @@ def locker_manifest(pad_id: str, ticket: str | None = None,
             if fmt:
                 integrity = _integrity(
                     None, 0, _expected_head_state(expected_head_hash, None)[0])
-                return _verification_failure(fmt, integrity, pad_id)
+                return _verification_failure(fmt, integrity, pad_id,
+                                             "malformed_expected_head")
             if not ticket:
                 # Never substitute the daemon's manifest head for the caller's
                 # reference: with no ticket there is no chain to walk, so the head
@@ -474,17 +600,22 @@ def locker_manifest(pad_id: str, ticket: str | None = None,
                     "an expected head can only be checked with a read_ticket, because "
                     "the head must be recomputed from the chain; the daemon's own "
                     "manifest head is not an independent reference",
-                    integrity, pad_id)
+                    integrity, pad_id, "ticket_required")
         if ticket:
             chain_valid, verified, _, manifest, observed = _fetch_and_verify_chain(pad_id, ticket)
             expected, failure = _expected_head_state(expected_head_hash, observed)
             integrity = _integrity(chain_valid, verified, expected)
             if failure:
-                return _verification_failure(failure, integrity, pad_id)
+                return _verification_failure(failure[1], integrity, pad_id, failure[0])
         else:
             manifest = _request("GET", f"/v1/pads/{pad_id}/manifest")
             integrity = _integrity(None, 0)
         return {**manifest, "integrity": integrity}
+    except VerificationFailure as e:
+        # The read could not be completed as a verification; fail closed.
+        integrity = _integrity(
+            None, 0, _expected_head_state(expected_head_hash, None)[0])
+        return _verification_failure(e.reason, integrity, pad_id, e.cause)
     except LockerError as e:
         return _err(e)
 
@@ -508,6 +639,11 @@ def locker_read_blocks(pad_id: str, ticket: str, from_block: int = 0,
                        to_block: int = 0, expected_head_hash: str | None = None) -> dict:
     try:
         chain_valid, verified, blocks, _, observed = _fetch_and_verify_chain(pad_id, ticket)
+    except VerificationFailure as e:
+        # Incomplete or inconsistent retrieval: fail closed, never a result.
+        integrity = _integrity(
+            None, 0, _expected_head_state(expected_head_hash, None)[0])
+        return _verification_failure(e.reason, integrity, pad_id, e.cause)
     except LockerError as e:
         return _err(e)
 
@@ -516,7 +652,7 @@ def locker_read_blocks(pad_id: str, ticket: str, from_block: int = 0,
     if failure:
         # A failed trusted-head check never returns payloads, so the result cannot
         # read as a successful verified read.
-        return _verification_failure(failure, integrity, pad_id)
+        return _verification_failure(failure[1], integrity, pad_id, failure[0])
 
     total = len(blocks)
     if total == 0:

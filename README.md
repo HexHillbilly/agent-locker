@@ -191,31 +191,77 @@ What the chain establishes:
   chain was recomputed so that it verifies against itself. Pass it as
   `expected_head_hash`; see *Trusted-head verification* below.
 
-What the chain does **not** establish:
+**What is verified, and what is merely asserted.** Four different things live in
+the same response, and they are not equally trustworthy:
+
+**1. Chain relationships the client recomputes.** For every block, `payload_b64`
+is decoded and `curr_hash` is recomputed as `sha256(prev_hash ++ payload_bytes)`;
+each block's `prev_hash` must equal its predecessor's `curr_hash` (genesis for the
+first), and the final `curr_hash` must equal the head the walk was aimed at. So
+the relationship between the payload bytes and the recorded hashes, the block
+ordering, and the linkage across the whole chain **are checked**. `prev_hash` and
+`curr_hash` are not unauthenticated metadata — they are the material the check is
+made of.
+
+**2. Checked for consistency, though not covered by the hash.** `seq` must be the
+block's contiguous 0-based position. The response must be coherent: the `pad_id`
+echo must match the pad requested, `total_blocks` must agree with the manifest's
+`block_count` and not change between pages, each page must return exactly the
+number of blocks asked for, and the total retrieved must equal the claimed count.
+Any failure here **fails closed** — an error and no payloads — rather than being
+reported as a verified read. It is not cryptographically bound, so it constrains a
+lying host without proving anything on its own.
+
+**3. Fields excluded from the hash — pure server assertions.** Per block:
+`content_type`, `created_at`. In the manifest: `state`, `total_bytes`, `sealed_at`,
+`created_at`, `expires_at`. Nothing verifies these and none is an input to
+verification. Treat them as claims about the pad, not facts about it.
+
+**4. Server assertions that *drive* verification — inputs, therefore not verified by
+it.** `block_count` decides how many blocks are fetched; the manifest's `head_hash`
+is the target the walk must land on. The host supplies both, so the host chooses
+the question. A head from the manifest is **not** a reference: only a head the
+caller obtained elsewhere is, and the client never substitutes the manifest's head
+for `expected_head_hash`.
+
+**What a trusted-head match precisely covers.** Given `expected_head_hash` = *H*
+supplied by the caller, `trusted_head_match` states: a contiguous chain from
+genesis was retrieved, each block's payload bytes hash into the linkage, and the
+recomputed head equals *H*. That binds the retrieved content byte-for-byte to *H*.
+Because omitting, adding, reordering or altering any block changes the recomputed
+head, a match also rules out truncation and rewriting **relative to *H***. It does
+**not** cover: the authenticity of *H* itself (if the channel that carried it is
+compromised the check is worthless), writer identity, anything in group 3, the
+truth or safety of the content, or anything about the host's other pads.
+
+**Availability limits.** Blocks past a claimed `block_count` are never requested,
+so **without** a supplied reference a host can withhold the tail and still verify:
+an empty pad and a withheld pad are indistinguishable, and a consistent prefix
+looks like a whole chain. With a reference, truncation is caught, because a prefix
+does not hash to the full chain's head. The client can never prove a host holds
+nothing more; it can prove that what it received is coherent and — given a
+reference — that it is exactly the referenced chain. A read lease expiring
+mid-session (403) can also leave a read uncompletable.
+
+**Still not established by any of this:**
 
 - It does **not authenticate the writer.** `from_agent` / `to_agent` are
   client-supplied strings; holding the write key proves possession of the write
   key, not identity.
-- It does **not** make the attestation true. Block 1 is free-form and
+- It does **not make the attestation true.** Block 1 is free-form and
   unvalidated: `verification.exit_code`, `tests_passed`, and
   `canonical_ref.commit_sha` are claims the writer makes about itself.
-- It does **not** authenticate the pad **metadata**, which is where the
-  verification inputs come from. `state`, `block_count`, `total_bytes`,
-  `sealed_at`, `created_at`, `expires_at` and `head_hash` in the manifest, and
-  `prev_hash` / `curr_hash` / `payload_utf8` / `created_at` on each block, are all
-  unauthenticated claims by the host. The client is *told* how many blocks to walk
-  and what head to land on, so a hostile host can withhold blocks, serve a
-  consistent prefix, or misreport state; the walk proves only that the blocks it
-  received agree with each other and — when you supply a reference — with that
-  reference. `payload_utf8` is a convenience decode of `payload_b64` and is not
-  itself verified.
-- It does **not** defend against a malicious operator. Whoever runs the daemon
+- It does **not defend against a malicious operator.** Whoever runs the daemon
   can rewrite both the chain and the head it serves; self-verification against a
   head obtained from the same server proves nothing new. Supplying an
   `expected_head_hash` from a *separate* trusted channel does narrow this — the
   rewrite is caught unless that channel is also compromised — but it is still not
   a substitute for decentralized consensus against a hostile host, and it does not
   establish writer identity.
+- The text a caller reads is **derived locally from the verified payload bytes**
+  (strict UTF-8, else `null`), never taken from the daemon's parallel
+  `payload_utf8` claim. If the two disagree, the read fails closed — a host
+  presenting different text from the bytes it served is not a host to trust.
 
 ## Auth & tickets
 
