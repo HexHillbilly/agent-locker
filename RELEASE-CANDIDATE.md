@@ -130,26 +130,52 @@ RC ARTIFACT SMOKE TEST PASSED
 ## 4. Artifacts
 
 **[S]** Built by the repository's own `scripts/release_build.py` from an explicit
-commit, into a directory outside the source tree
-(`/home/lucky/padlockspace-rc/0.1.2rc1`):
+commit, into `/home/lucky/padlockspace-rc/build-rc1` (outside the source tree):
 
 | Artifact | Bytes | sha256 |
 |----------|-------|--------|
-| `lockermcp-0.1.2rc1-py3-none-any.whl` | 46,692 | `0a8850f998ee72a4cf20e355feeab213eea7e338e9440fce4b6d3ae5d459b3d5` |
-| `lockermcp-0.1.2rc1.tar.gz` | 83,722 | `fa0de542deef1ecd3bb315de368e013f92d2749fc73147dad7e28a1b2ec6b74c` |
-| `source-manifest-56ba1d55da59.json` | 6,876 | `d3693586f33f7e1ae5db24c24ebd5ebf57d45a71261dda11670e7ab47751ba77` |
-| `PROVENANCE-56ba1d55da59.json` | 1,460 | — |
+| `lockermcp-0.1.2rc1-py3-none-any.whl` | 46,692 | `fd5fced49dcf3fe505530346d2c6660b4b2aaef973794d69f694c2ed537ef408` |
+| `lockermcp-0.1.2rc1.tar.gz` | 83,763 | `d59b4b9019498dddab741d0669068202f234bea77a0931d1b2303aa781d81445` |
+| `source-manifest-2d0ec63a0cc0.json` | 7,066 | `58976f0bb6ece812677a1b95438ea3eed856cbb122a182acc1dff456ac15eed4` |
+| `PROVENANCE-2d0ec63a0cc0.json` | 1,495 | — |
 
-Source commit `56ba1d55da596dedc7e3108a73842707872f6fe5`. Build tools recorded in
-provenance: uv 0.11.14, setuptools 84.0.0, build 1.6.1. **[C]** The script records
-hashes for comparison and does **not** claim byte-for-byte reproducible builds, so
-re-running it will produce different hashes; treat the commit, not the hash, as the
-identity of the candidate.
+Source commit **`2d0ec63a0cc0c48ad278404127011475c2b781d8`** (42 files, 325,151 bytes
+exported). Build tools recorded in provenance: uv 0.11.14, setuptools 84.0.0, build
+1.6.1.
 
 Wheel contents: `lockerd/` (8 modules) + `lockermcp/` (3 modules) + dist-info with
 `LICENSE`. No deployment configuration in the wheel.
 
----
+**[S] Artifacts are pinned to a commit, and an earlier build was correctly discarded.**
+A first build was made from `56ba1d5`. The commit that followed it reworded
+`RELEASE_NOTES.md` — and `MANIFEST.in` **does** ship `RELEASE_NOTES.md`, so the
+changelog is part of the artifact and that build no longer described the branch. It
+was rebuilt from the tip rather than shipped, which is also why §5 says rebuild after
+any change.
+
+**[C] This document itself is not shipped.** `MANIFEST.in` does not list
+`RELEASE-CANDIDATE.md`, `SECURITY-PHASE2.md`, `SECURITY-PHASE3.md` or
+`PHASE4-LIFECYCLE-POLICY.md`, so edits to them cannot change the artifact contents.
+**To confirm that, rather than take it on trust:**
+
+```bash
+git diff --name-only 2d0ec63a0cc0c48ad278404127011475c2b781d8 <branch-tip>
+# every path listed must be one MANIFEST.in does not ship, or the artifacts are stale
+```
+
+**[C] Archive hashes are not reproducible; content digests are.** `release_build.py`
+explicitly does not claim byte-for-byte reproducible builds, so re-running it yields
+different archive hashes even from an identical tree. To compare two candidates,
+compare the *contents*: for each archive, sort the member names and hash
+`name ++ sha256(member bytes)`.
+
+| Archive | Members | Content digest (sha256, first 32) |
+|---------|---------|-----------------------------------|
+| wheel | 17 | `0b9c0d9ea22bb9174348e8231cf2d440` |
+| sdist | 39 | `738a634f96d1b32b44b02be3df59c6c5` |
+
+**[C] Treat the source commit as the identity of the candidate**, not the archive
+hash.
 
 ## 5. To cut the release (operator-run, not executed)
 
