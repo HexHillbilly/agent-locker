@@ -5,6 +5,38 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
+## 0.1.1 — candidate, unpublished (prepared 2026-10-07)
+
+Changes since `0.1.0`:
+
+- **Licensing.** Added the verbatim GNU AGPL v3 text as `LICENSE` and wired it
+  into the packaging metadata (`License-Expression: AGPL-3.0-or-later`,
+  `License-File: LICENSE`), so both the wheel and the sdist carry it.
+  `README.md` now documents the dual license and states that commercial
+  licenses are available on request.
+- **Version.** `0.1.0` → `0.1.1` in `pyproject.toml`, both packages'
+  `__version__`, and the MCP server identity. `/health` reports the package
+  version, so the reported version moves with the package.
+- **Documentation.** `README.md` now separates the installed-package,
+  source-distribution and repository workflows; marks the `uvx lockermcp`
+  install path as pending publication rather than working; documents the
+  `POST /v1/pads/{id}/tickets` endpoint implemented in this revision; states the
+  integrity guarantees and, separately, their limits; and drops the hard-coded
+  test count.
+- **Source distribution contents.** Added `MANIFEST.in` so the sdist carries the
+  files the documented source-install and example workflows need — `scripts/`,
+  `demo_handoff.py`, `mcp_config.example.json`, `Dockerfile`,
+  `docker-compose.yml`, `.env.example` and these notes. Host deployment
+  materials under `deploy/` are deliberately excluded.
+- **Release tooling.** Added `scripts/release_build.py`: a repeatable
+  export-and-build command that takes an explicit commit, builds from a fresh
+  export of that commit, and records a source manifest, provenance and artifact
+  hashes.
+
+**Status:** built and verified locally from a committed source export. **Not
+published to PyPI**; no tag was moved and nothing was pushed. `uvx lockermcp`
+does not resolve. Production payment enforcement remains unverified.
+
 ## 2026-10-07 — hosted instance trails the source revision
 
 Observed while reconciling release state (Phase S1). Recorded as an observation,[S]
@@ -30,4 +62,4 @@ Consequences, stated plainly:
 - The `llms.txt` served by the host advertises the ticket endpoint and the `409`
   behaviour; both are ahead of what that host actually runs.
 
-No redeployment was performed or authorised in this phase.
+No redeployment was performed or authorised.

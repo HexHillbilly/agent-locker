@@ -5,6 +5,7 @@ import hashlib
 import httpx
 import pytest
 
+from lockerd import __version__ as LOCKERD_VERSION
 from lockerd import config as cfg
 from lockerd.main import create_app
 
@@ -93,7 +94,7 @@ async def test_health_returns_ok(client):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ok"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == LOCKERD_VERSION
     assert body["database"]["writable"] is True
     assert body["database"]["wal_mode"] is True
     assert body["rpc"]["network"] == "base"

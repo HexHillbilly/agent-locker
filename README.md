@@ -8,30 +8,65 @@ server (`lockermcp`) so AI agents can drive it natively.
 Python / FastAPI + aiosqlite (single-file SQLite, WAL mode). No Redis, no S3,
 no external services.
 
+## Three ways to use this project
+
+They differ in what you get, not in how the daemon behaves.
+
+- **Installed package** — `pip install lockermcp` (or, once published, `uvx
+  lockermcp`). Installs the two importable packages and the `lockerd` /
+  `lockermcp` console scripts. No example scripts, no tests, no Docker or
+  deployment files.
+- **Source distribution** — the `.tar.gz` on the package index. Adds the test
+  suite, the example scripts, `demo_handoff.py`, `mcp_config.example.json`, the
+  Docker files and these release notes, so the workflows documented below all
+  work from an unpacked sdist.
+- **Repository checkout** — everything in the sdist, **plus** `deploy/`, which
+  holds host deployment materials for the hosted service (reverse-proxy config
+  and the public static site). Deployment materials are deliberately not
+  published in the source distribution.
+
+Repository: <https://github.com/HexHillbilly/agent-locker>
+
 ## Install
 
-**Intended published path — pending publication.** The package is intended to be
-run straight from PyPI with `uvx`:
+### A. Installed package (intended path — pending publication)
 
 ```bash
 uvx lockermcp                      # MCP server (stdio)
 uvx --from lockermcp lockerd       # daemon
 ```
 
-`lockermcp` is **not yet published to PyPI**, so `uvx lockermcp` does not resolve
-today. This is the intended install path once publication completes; nothing
-else in this document depends on it.
-
-**Working install path today.** Install from a source checkout into a virtual
-environment:
+**Status: prepared, not published.** The current candidate is version `0.1.1`.
+It has been built and verified locally from a committed source export, but it
+has **not** been uploaded to PyPI, so `uvx lockermcp` does not resolve today.
+Read this section as the intended path, not as a verified one, until a release
+appears on the index. Once published, the equivalent non-uvx form is:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install .                # or: pip install -e ".[dev]" for development
+pip install lockermcp
+lockerd            # daemon
+lockermcp          # MCP server (stdio)
 ```
 
-This installs both console entry points — `lockerd` (the daemon) and `lockermcp`
-(the MCP server) — and the same two commands are what `uvx` will provide later.
+### B. From the source distribution
+
+```bash
+tar xzf lockermcp-0.1.1.tar.gz && cd lockermcp-0.1.1
+python -m venv .venv && source .venv/bin/activate
+pip install .
+```
+
+The unpacked tree also contains `tests/`, `scripts/`, `demo_handoff.py` and
+`mcp_config.example.json`, so the example workflows below run from there
+directly.
+
+### C. From a repository checkout (development)
+
+```bash
+git clone https://github.com/HexHillbilly/agent-locker && cd agent-locker
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
 
 ## Run the daemon
 
@@ -58,9 +93,10 @@ configuration is `LOCKER_URL`, the daemon's base URL.
 }
 ```
 
-`mcp_config.example.json` in this repository is that block verbatim. Register it
-with Claude Code / Cursor / Open WebUI via the stdio `mcpServers` block. Until
-publication, substitute the locally installed entry point for the `uvx` form:
+`mcp_config.example.json` (in the source distribution and the checkout) is that
+block verbatim. Register it with Claude Code / Cursor / Open WebUI via the stdio
+`mcpServers` block. Before a release is published, substitute the locally
+installed entry point for the `uvx` form:
 
 ```json
 { "command": "lockermcp", "args": [], "env": { "LOCKER_URL": "http://127.0.0.1:8000" } }
@@ -200,8 +236,8 @@ to require proof of payment on `POST /v1/pads`.
 - `lockermcp` `locker_create` / `locker_deposit` accept an optional `payment_tx_hash`
   and surface the structured 402 challenge in their error object.
 
-The rail is off by default; the payment tests run against mocks, and the
-on-chain path has not been exercised against a live payment.
+The rail is off by default. Its tests run against mocks; **production payment
+enforcement has not been exercised against a live payment and is unverified.**
 
 ## MCP server (`lockermcp`)
 
@@ -228,7 +264,10 @@ computes SHA-256 itself:
 `chain_valid` reports internal consistency only; see *Integrity guarantees and
 their limits* above for what it does not prove.
 
-## Operations
+## Example scripts (source distribution and checkout)
+
+These are not part of the installed wheel. They live in the repository
+(<https://github.com/HexHillbilly/agent-locker>) and in the source distribution.
 
 ```bash
 # Inspect a pad and verify its chain (stdlib only, no deps)
@@ -236,10 +275,18 @@ python scripts/inspect_pad.py <pad_id> --ticket <read_ticket> [--url http://127.
 
 # Two-agent handoff demo against a running daemon (open mode)
 python demo_handoff.py [http://127.0.0.1:8000]
+
+# Two-agent handoff over MCP, with its own daemon: planner/worker, post-seal
+# rejection, read-lease expiry, tamper detection
+python scripts/test_handoff_e2e.py
 ```
 
-Prints pad state, block count, total bytes, sealed status, head hash, and an
-explicit SHA-256 chain verification.
+`inspect_pad.py` prints pad state, block count, total bytes, sealed status, head
+hash, and an explicit SHA-256 chain verification.
+
+Maintainers additionally have `scripts/release_build.py` (the clean-export +
+build command described under *Release artifacts*) and `scripts/dogfood_llm.py`
+(a live-LLM harness that drives `lockermcp` end to end with a local model).
 
 ## Release artifacts
 
@@ -281,6 +328,9 @@ cap, so an oversized body is rejected before it is fully buffered.
 
 ## Docker
 
+`Dockerfile` and `docker-compose.yml` ship in the source distribution and the
+checkout (not in the wheel):
+
 ```bash
 docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
 ```
@@ -289,8 +339,10 @@ docker compose up -d   # builds + runs the daemon on :8000, SQLite at /data
   compile on musl), runs as a non-root `locker` user.
 - SQLite lives at `/data/locker.db` on a named volume (`locker-data`) with WAL
   mode enabled; the `-wal`/`-shm` sidecars sit in the same volume.
-- `deploy/Caddyfile`: reverse proxy in front of the daemon with a 128 KB
-  `request_body` cap and sane connection timeouts.
+
+Host deployment materials — the reverse-proxy config and the public static site
+under `deploy/` — are **repository-only** and are not published in the source
+distribution. See <https://github.com/HexHillbilly/agent-locker/tree/main/deploy>.
 
 ## Testing
 
@@ -302,14 +354,18 @@ pytest -q                                    # full suite: API + quotas + lease 
                                              # planner + worker (Ollama; --model qwen2.5:14b recommended)
 ```
 
+The live-LLM harness needs a local model and is not part of the release
+verification.
+
 ## License
 
 agent-locker is dual-licensed. The source is available under the **GNU Affero
 General Public License, version 3 or (at your option) any later version**
-(AGPL-3.0-or-later) — see [LICENSE](LICENSE) — matching the license declared in
-`pyproject.toml`. For proprietary or hosted use where AGPL obligations do not
-fit, a separate commercial license is available from the project owner.
-**Commercial licenses are available on request.**
+(AGPL-3.0-or-later) — see [`LICENSE`](https://github.com/HexHillbilly/agent-locker/blob/main/LICENSE)
+— matching the license declared in `pyproject.toml`. For proprietary or hosted
+use where AGPL obligations do not fit, a separate commercial license is
+available from the project owner. **Commercial licenses are available on
+request.**
 
 ## Notes
 
@@ -317,5 +373,6 @@ fit, a separate commercial license is available from the project owner.
   and returns HTTP 402 with a challenge when no proof is presented.
 - The DB schema carries a `tickets.lease_started_at` column; the DB file is
   gitignored/regenerable, so delete an old one rather than migrating.
-- Deployment observations (what revision a given host is serving) are recorded in
-  [RELEASE_NOTES.md](RELEASE_NOTES.md), not here, because they go stale.
+- Deployment observations (which revision a given host is serving) are recorded
+  in [RELEASE_NOTES.md](https://github.com/HexHillbilly/agent-locker/blob/main/RELEASE_NOTES.md),
+  not here, because they go stale.

@@ -15,7 +15,7 @@ ZERO_HASH = "0" * 64
 
 server = MCPServer(
     "lockermcp",
-    version="0.1.0",
+    version="0.1.1",
     instructions=(
         "Append-only, tamper-evident agent-to-agent handoff. Block 0 must be a "
         "locker.handoff.v1 envelope. Every read reports an `integrity` block — "

@@ -1,0 +1,32 @@
+# Source-distribution contents.
+#
+# The sdist must carry everything the documented source-install and example
+# workflows need. The wheel (built from this sdist or from the tree) contains
+# only the two importable packages and is unaffected by this file.
+#
+# Deliberately NOT included: deploy/ (host deployment materials for the hosted
+# service), developer environments, caches and databases.
+
+include LICENSE
+include README.md
+include RELEASE_NOTES.md
+include .env.example
+include .dockerignore
+include Dockerfile
+include docker-compose.yml
+include demo_handoff.py
+include mcp_config.example.json
+include scripts/*.py
+
+# Host deployment materials stay out of the published source distribution.
+prune deploy
+
+# Never ship build/dev residue or local databases, even if one exists in the
+# working tree when the sdist is created.
+global-exclude *.py[cod]
+global-exclude *.db
+global-exclude *.db-wal
+global-exclude *.db-shm
+prune .venv
+prune .pytest_cache
+prune __pycache__
