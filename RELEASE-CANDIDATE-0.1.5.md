@@ -92,6 +92,57 @@ capabilities work against the daemon and that no failure claims a rollback or a 
 - Everything was exercised against local daemons and a local shim on temporary data. No live
   payment, no remote host, no production endpoint.
 
+## Proposed release and deployment plan
+
+**Status: a proposal. Nothing below has been executed, and publication and deployment remain
+unapproved.** The three actions are deliberately separable: any one can be approved, deferred
+or refused without the others.
+
+### Action A — publish to PyPI (separate approval)
+
+| Item | Value |
+|---|---|
+| Exact artifacts | the two files named above, uploaded as built, with no rebuild |
+| Upload | an explicitly provisioned credential, entered interactively by the operator; never searched for, never in argv, env or a file |
+| Verification | index-recorded digests and sizes compared against the table above, both files downloaded and re-hashed, then `pip install` of the index version into a fresh environment outside the checkout with the installed-artifact checks re-run |
+
+### Action B — git refs (separate approval)
+
+| Item | Value |
+|---|---|
+| Destinations | private Gitea `Lagoon/agent-locker`, public GitHub `HexHillbilly/agent-locker` |
+| Branch | `release/0.1.5-public`, based on the public baseline `d59efac`, a clean history containing no capability material |
+| `main` | fast-forward to the build-source commit on both remotes, after re-checking ancestry and that no divergent commits exist |
+| Tag | one annotated `v0.1.5` targeting that same commit, message self-contained with both artifact hashes inline; report the tag object and its dereferenced commit separately; existing tags `v0.1.0`–`v0.1.4` must not move |
+| Private branch | `security/0.1.5-writer-verification` is preserved as private review evidence and is **not** pushed to the public remote |
+
+### Action C — hosted service (NOT proposed for this release)
+
+**[C] No change is proposed to the hosted service.** This release is client-focused: the
+recovery contract and the writer-side verification live in `lockermcp`, and the daemon-side
+changes are the description text and the `inspect_pad.py` argument handling, neither of which
+the hosted instance exposes.
+
+- **Observed state only.** The hosted API answers `GET /health` and reports `0.1.0`; exactly
+  three paths are public at the edge and only `GET`/`HEAD`; everything else returns `403`. That
+  is an observation of responses, not of running code.
+- **[U] The running build identity is NOT established here.** A version string inside stored
+  demo content is not proof of the running build, and this branch did not inspect the daemon's
+  process, image or filesystem. The deployment records say one thing, the responses say
+  another, and neither is running-code identity. Any future deployment assessment must resolve
+  those three separately.
+- **If a hosted upgrade is ever proposed**, it would need its own approval and its own plan:
+  target host, the currently observed state re-checked, the installation method, the effective
+  logging and ticket-transport settings from §5a, a fresh backup with its path and digest
+  recorded before anything changes, smoke checks, and a rollback path — none of which is
+  specified here.
+
+### Action D — website (separate approval)
+
+**[C] No website edit is proposed.** The site currently describes `lockermcp` 0.1.4. A 0.1.5
+wording update would be a separate change with its own bundle, rehearsal and approval, exactly
+as the 0.1.4 correction was. It is listed here only so it is not conflated with publishing.
+
 ## Not done here, and what approval would entail
 
 **[U] Untouched by this preparation:** no remote push, no tag, no publication, no

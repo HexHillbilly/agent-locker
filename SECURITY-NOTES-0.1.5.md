@@ -230,6 +230,31 @@ Kept as four separate statements, because they are four different claims.
 - **[S] Ambiguous network outcomes.** Measured in §4.1: a lost seal response leaves the pad
   sealed while the caller sees an error.
 
+## 5a. The logging boundary, stated precisely
+
+Three separate claims, kept apart because they have different answers.
+
+1. **[S] Credential logging at DEBUG is real and measured.** `aiosqlite` logs bound SQL
+   parameters at DEBUG, and those parameters include the read ticket and the write-key hash
+   (`… INSERT INTO tickets (ticket_id, pad_id, type, max_reads, created_at) VALUES (?,?,?,?,?)',
+   ('<ticket>', …) completed`). The application does not control that logger. **The claim made
+   here is not "capabilities are never logged at any level".** It is: at the configuration
+   below they are not, and at DEBUG they are.
+2. **[C] The effective logger configuration required for deployment.**
+   - The daemon runs at `INFO` or above. `lockerd` configures no logging of its own — the only
+     loggers it creates are `lockerd.main` and `lockerd.payments` — so it inherits the
+     server's configuration, and uvicorn's default is `info`. `--log-level debug` is not safe.
+   - Independently, pin `aiosqlite` to `WARNING`, so that DEBUG enabled elsewhere cannot reach
+     its parameter logging. Both halves are pinned by tests.
+   - `LOCKER_TICKET_TRANSPORT=header`, which is the default and is asserted by a test. Under
+     `query` the ticket becomes part of the request URL.
+3. **[S] Request-URL logging is a different question from credential logging.** At INFO, httpx
+   logs each request URL. Measured: under header transport the ticket appears in **no** record
+   and httpx renders no request headers; under query transport the ticket **is** present in the
+   logged URL. A pad identifier does appear in URLs under both transports, because it is part
+   of the path — and an identifier is not a credential: writes need the write key, reads need a
+   ticket. Both cases are asserted by tests in `tests/test_deposit_recovery.py`.
+
 ## 6. The unreported defect found while reconciling the baseline
 
 **[S] The baseline suite was not deterministic.** At `d59efac`, `pytest` reports

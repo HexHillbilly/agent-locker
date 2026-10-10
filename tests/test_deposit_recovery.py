@@ -392,6 +392,51 @@ def test_daemon_side_debug_logging_exposes_ticket_values_and_can_be_silenced(dep
         root.removeHandler(quiet)
 
 
+def test_the_ticket_transport_decides_whether_a_ticket_shapes_a_request_url(
+        deposit_daemon, monkeypatch):
+    """Measured: "no credentials in logs" holds under the HEADER transport, not the query one.
+
+    The client's own records never carry a ticket either way. The difference is the HTTP
+    transport's INFO line for the request URL: with `LOCKER_TICKET_TRANSPORT=query` the ticket
+    is part of that URL and is therefore written to the log by httpx, which the application
+    cannot prevent. That is why header transport is the deployment requirement.
+    """
+    base, _db = deposit_daemon
+    mcp.LOCKER_URL = base
+    created = mcp.locker_create(ttl_seconds=3600, max_blocks=8)
+    pad_id, write_key, ticket = (created["pad_id"], created["write_key"],
+                                 created["read_ticket"])
+    mcp.locker_append(pad_id=pad_id, write_key=write_key, payload=dict(ENVELOPE))
+    mcp.locker_seal(pad_id=pad_id, write_key=write_key)
+
+    def records_for(transport: str) -> str:
+        monkeypatch.setenv("LOCKER_TICKET_TRANSPORT", transport)
+        sink = _RecordingHandler()
+        http_logger = logging.getLogger("httpx")
+        old = http_logger.level
+        http_logger.setLevel(logging.INFO)
+        http_logger.addHandler(sink)
+        try:
+            result = mcp.locker_read_blocks(pad_id=pad_id, ticket=ticket, from_block=0, to_block=9)
+        finally:
+            http_logger.removeHandler(sink)
+            http_logger.setLevel(old)
+        assert "error" not in result, result
+        return sink.text
+
+    header_log = records_for("header")
+    assert ticket not in header_log, "the header transport put the ticket in a URL log"
+    assert "Authorization" not in header_log, "httpx must not render request headers"
+
+    query_log = records_for("query")
+    assert ticket in query_log, (
+        "fixture check: with the query transport the ticket should appear in the request URL "
+        "that httpx logs -- if it does not, this test documents nothing")
+    # and the default really is the safe one
+    monkeypatch.delenv("LOCKER_TICKET_TRANSPORT", raising=False)
+    assert mcp.ticket_transport() == "header", "the default transport must be header"
+
+
 def test_asymmetric_case_a_returned_capability_is_usable_but_never_hashed_into_evidence(
         deposit_daemon, injecting):
     """The caller may act on the returned capability; the evidence must not carry it."""

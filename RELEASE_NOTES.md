@@ -63,10 +63,23 @@ add `partial`. Nothing is removed, no daemon API changed, no stored data changed
 hash format is untouched. `locker_create`, `locker_append` and `locker_seal` are unchanged
 apart from their descriptions.
 
-**[C] Operational note, measured.** `aiosqlite` logs bound SQL parameters at `DEBUG`, and
-those parameters include read tickets. Running a live daemon at `DEBUG` therefore writes
-capability material into its log. Keep the daemon at `INFO` or above, or quiet the
-`aiosqlite` logger; the exposure and its mitigation are both pinned by a test.
+**[C] Operational note, measured — the logging boundary.** Three separate settings, and
+none of them alone is sufficient:
+
+- **Run the daemon at `INFO` or above.** `aiosqlite` logs bound SQL parameters at `DEBUG`,
+  and those parameters include read tickets. `lockerd` configures no logging of its own, so it
+  inherits the server's; uvicorn's default `info` is safe and `--log-level debug` is not.
+- **Pin `aiosqlite` to `WARNING` as well**, so that DEBUG enabled for some other component
+  cannot reach its parameter logging.
+- **Keep `LOCKER_TICKET_TRANSPORT=header`** (the default). Under `query` the ticket becomes
+  part of the request URL, and httpx logs request URLs at `INFO`, so the ticket would be
+  written to the log by the HTTP client — which this application cannot prevent.
+
+Request-URL logging is a separate question from credential logging: a pad identifier does
+appear in logged URLs under either transport, because it is part of the path, and an
+identifier is not a credential — writes need the write key and reads need a ticket. The
+application itself logs no capability and prints nothing, at DEBUG. All three statements are
+pinned by tests rather than asserted.
 
 ## 0.1.4
 
