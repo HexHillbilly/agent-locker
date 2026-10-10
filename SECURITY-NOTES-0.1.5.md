@@ -272,6 +272,58 @@ operator-visible defect in a shipped script plus a flaky gate over whether the b
 green. `scripts/inspect_pad.py` now normalises that one argument form. Post-fix both forms
 exit 0, and the previously flaky test passes.
 
+## 6a. Capability material in reachable history — disposition
+
+**[S] What was exposed, identified without reproducing it.** One earlier commit on the private
+review branch, `e4138481656da592c3be9e07d10494d3bf13fb07`, contains two real values in its
+captured reproduction output, both of which were redacted in the commits that followed:
+
+| Value | Kind | Where | Reach |
+|---|---|---|---|
+| a read ticket (43 chars) | access-granting | `repro/0.1.5/out_ticket_dash.txt` | that commit only |
+| a pad id (32 hex) | identifier | `repro/0.1.5/out_partial_deposit_prepatch.txt` | that commit only |
+
+Neither value is reproduced here, and neither fingerprint is recorded here either: this
+repository is public, and a digest of a value is still a value's fingerprint. Both can be
+re-derived from the commit by anyone with access to it, using
+`repro/0.1.5/characterize_capability_values.py`, which prints fingerprints rather than values.
+
+No **write key** appears anywhere in this repository's history. The scan that establishes this
+checked for the capability *shape* **and** for the exact bytes of every value found.
+
+**[S] Every exposed value belonged exclusively to disposable local test data.** Both come from
+`repro/0.1.5/repro_ticket_dash.py` / `repro_partial_deposit.py`, which create their daemon with
+`tempfile.mktemp(prefix="repro_…", suffix=".db")`, `AUTH_OPEN`, and a uvicorn bound to
+`127.0.0.1` on an ephemeral port. The ticket was searched for byte-for-byte across every
+`*.db`, `*.db-wal` and `*.db-shm` under `/tmp` and the home directory: **absent**, so the
+database that minted it no longer exists and the value is inert. It could not have reached a
+retained or remotely reachable service: a read ticket is a random per-daemon string that only
+the daemon holding that pad honours, and it was never transmitted anywhere — deliberately,
+including in this investigation.
+
+**[C] Pad identifiers and credentials are different things, and are reported separately.** A
+pad id grants nothing on its own: writes require the write key and reads require a ticket. It
+is withheld from evidence all the same, because the operator directive treats known pad
+identifiers and capabilities alike there.
+
+**[S] No release artifact contains either value.** An exact-byte scan of the 0.1.5 wheel and
+sdist and of the published 0.1.4 wheel and sdist found neither. The four 43-character hits in
+those artifacts are **test function names** — `test_hardening.py`, `test_lockerd.py`,
+`test_post_012_findings.py` and `test_deposit_recovery.py` each contain a function whose name
+is exactly 43 url-safe characters. **This is why a token-shape scan is not evidence:** a shape
+check alone would have reported four false positives and buried the two real values. No release
+tag reaches `e413848`.
+
+**[S] The publication branch has a clean history.** `release/0.1.5-public` is based on the
+public baseline `d59efac` and its commits contain neither value — verified by recovering both
+values from the private commit and searching for them by exact bytes across all 72 blobs of
+that branch, not by shape. Its tree is byte-identical to the private branch's final tree.
+
+**[S] The private review branch is preserved unmodified.** It is left exactly where a reviewer
+last saw it, with the exposing commit untouched. Redaction in a later commit does not sanitize
+earlier history, which is precisely why the publication branch exists rather than a rebase, and
+why nothing was force-pushed or silently rewritten.
+
 ## 7. Regressions added
 
 `tests/test_deposit_recovery.py` — 10 tests, one per required validation case: failure

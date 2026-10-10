@@ -9,23 +9,28 @@ This file is deliberately unshipped (the source distribution carries only `READM
 
 | Item | Value |
 |---|---|
-| Build-source commit | `130da4163f99d6dfded35194fb9bc1bc8b4576f3` |
-| Subject | remove a stray duplicate capture from repro/0.1.5 |
-| Branch | `security/0.1.5-writer-verification` (off the reviewed baseline `d59efac`) |
-| Exported | 65 files, 615,832 bytes (clean export of the committed tree) |
-| Source manifest | `source-manifest-130da4163f99.json`, sha256 `166547f29c87b3ccc7d0a82772bd65be2cb2518f9abab7402d226936342faad2` |
-| Provenance | `PROVENANCE-130da4163f99.json` |
+| Build-source commit | `8441a739279f0285eca02ed6e441a4feedcfc72b` |
+| Subject | logging boundary stated precisely, and the release/deployment plan recorded |
+| Branch | `release/0.1.5-public`, based on the public baseline `d59efac`, no capability material in its history |
+| Exported | 73 files, 728,399 bytes (clean export of the committed tree) |
+| Source manifest | `source-manifest-8441a739279f.json`, sha256 `342491fb8052167a2daca9ee1a5fd6445a4678bb19d57afaa8c29deeee1f6b79` |
+| Provenance | `PROVENANCE-8441a739279f.json` |
 
 ## Artifacts
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `lockermcp-0.1.5-py3-none-any.whl` | 64,714 | `3662873e9fc8a2e25e1b9199cf2c38d5cf040cdfbed0ea6645b901a5d203a410` |
-| `lockermcp-0.1.5.tar.gz` | 152,473 | `87f2b217872e07ab3cb06a953ab0ec2071a855baa5024f09f4191767c777b7e0` |
+| `lockermcp-0.1.5-py3-none-any.whl` | 65,812 | `916fc18ad9e1c394f6bd4d8cba6841e2748c4776734b7f20743412790de2d4a3` |
+| `lockermcp-0.1.5.tar.gz` | 155,380 | `dcf325d2cf959ed3387df7b41d536497d6775ed2add2377519952cf166a08881` |
 
 Supplementary: `MEMBER-DIGESTS-0.1.5.txt` (sha256
-`2c534f5492910af12ff984fcfb771606b550157680885bc0757fb47dcf9ec5f5`) holds the per-member
-content digests — 17 wheel members, 42 sdist members.
+`31b1dc172de1816cea581cd9b4720364e409aea20d2171cd6b3f57959c9b0996`) holds the per-member
+content digests — 17 wheel members, 46 sdist members.
+
+**[S] Superseded.** An earlier candidate, built from `130da41` before the create-failure
+classification fix and before this publication branch existed, is preserved at
+`/home/lucky/padlockspace-rc/superseded/release-0.1.5-candidate-built-from-130da41/` with a
+`SUPERSEDED.txt` marker. **Do not publish it.**
 
 ## Included files, verified
 
@@ -43,9 +48,9 @@ content digests — 17 wheel members, 42 sdist members.
 
 | Check | Result |
 |---|---|
-| Full test suite | **208 passed** (baseline at the reviewed commit: 184 passed + 1 nondeterministic failure) |
+| Full test suite | **212 passed** (baseline at the reviewed commit: 184 passed + 1 nondeterministic failure) |
 | MCP end-to-end | **PASSED** |
-| Installed-artifact checks, fresh venv outside the checkout | **41/41 passed** — `INSTALLED-VERIFICATION-0.1.5.txt` |
+| Installed-artifact checks, fresh venv outside the checkout | **59/59 passed** — `INSTALLED-VERIFICATION-0.1.5.txt` |
 | Reproduction evidence | `repro/0.1.5/` — five scripts and their captured outputs, capability-redacted |
 
 The installed-artifact run exercises the wheel, not the checkout: provenance, version,
