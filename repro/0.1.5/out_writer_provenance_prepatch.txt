@@ -1,0 +1,53 @@
+
+=== case: honest ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: True
+  client-reported head source: None (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  reader verdict against the returned reference: trusted_head_match
+  reader received blocks     : True
+
+=== case: ack-rewritten ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: True
+  client-reported head source: None (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  reader verdict against the returned reference: trusted_head_match
+  reader received blocks     : True
+
+=== case: seal-head-rewritten ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: False
+  client-reported head source: None (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  reader verdict against the returned reference: error:verification_failed
+  reader received blocks     : False
+
+=== case: payload-swapped ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: False
+  client-reported head source: None (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: False
+  daemon's stored chain equals the locally computed chain: False
+  reader verdict against the returned reference: trusted_head_match
+  reader received blocks     : True
+
+=== case: rewritten-chain ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: True
+  client-reported head source: None (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  rewritten (rehashed) head  : a182152c6bfb0199…
+  reader verdict against the returned reference: error:verification_failed
+  reader received blocks     : False
+
+Summary
+  honest               deposit=head==local      stored_as_sent=True  reader=trusted_head_match
+  ack-rewritten        deposit=head==local      stored_as_sent=True  reader=trusted_head_match
+  seal-head-rewritten  deposit=head!=local      stored_as_sent=True  reader=error:verification_failed
+  payload-swapped      deposit=head!=local      stored_as_sent=False  reader=trusted_head_match
+  rewritten-chain      deposit=head==local      stored_as_sent=True  reader=error:verification_failed

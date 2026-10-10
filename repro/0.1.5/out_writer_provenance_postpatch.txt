@@ -1,0 +1,38 @@
+
+=== case: honest ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: True
+  client-reported head source: 'locally_computed' (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  reader verdict against the returned reference: trusted_head_match
+  reader received blocks     : True
+
+=== case: ack-rewritten ===
+  deposit returned an error : True
+  error (capabilities scrubbed): {'error': {'status': 0, 'kind': 'verification_failed', 'cause': '<redacted: 30 chars>', 'detail': 'append 0 was acknowledged with a hash that does not match the bytes this client submitted.'}, 'pad_id': '<redacted>', 'partial': {'status': 'partial', 'acknowledged': ['create'], 'uncertain': ['append 0'], 'recovery': '<redacted: 21 chars>', 'capabilities': '<redacted>', 'automatic_recovery': False, 'note': 'An acknowledgment means the daemon answered for that step. It is not proof that the bytes are durably stored, still available, or readable.', 'continuation': 'Do not continue, retry, replay or compensate automatically after a verification failure: the acknowledged steps are not confirmed to hold the bytes submitted. Inspect the pad before acting. Nothing is retried, replayed, compensated or deleted, and no automatic continuation is performed. Inspect the pad yourself before acting on it.', 'uncertain_note': "The step(s) listed under 'uncertain' may already have committed: their outcome was not determined. Do not retry them blindly.", 'capabilities_note': 'This result carries pad capabilities. Treat it exactly like a successful creation result: it is a secret, and it must not be logged, pasted into a report or committed to evidence.'}, 'integrity': {'reference': 'the intended complete deposit, computed by this client', 'expected_head': '692b1296769f774cc5db94a8ae1c2fe976c9983718b5b61670932be8b1445911', 'acknowledged_prefix_head': '0000000000000000000000000000000000000000000000000000000000000000', 'acknowledged_prefix_note': "the head of the acknowledged prefix: NOT the intended complete deposit and NOT the daemon's head", 'server_head_hash': None, 'checked': 'every append acknowledgment and the seal response', 'suffix': 'acknowledgment'}}
+
+=== case: seal-head-rewritten ===
+  deposit returned an error : True
+  error (capabilities scrubbed): {'error': {'status': 0, 'kind': 'verification_failed', 'cause': 'seal_head_mismatch', 'detail': 'the sealed head does not match the chain computed from the submitted bytes.'}, 'pad_id': '<redacted>', 'partial': {'status': 'partial', 'acknowledged': ['create', 'append 0', 'append 1', 'append 2'], 'uncertain': ['seal'], 'recovery': '<redacted: 21 chars>', 'capabilities': '<redacted>', 'automatic_recovery': False, 'note': 'An acknowledgment means the daemon answered for that step. It is not proof that the bytes are durably stored, still available, or readable.', 'continuation': 'Do not continue, retry, replay or compensate automatically after a verification failure: the acknowledged steps are not confirmed to hold the bytes submitted. Inspect the pad before acting. Nothing is retried, replayed, compensated or deleted, and no automatic continuation is performed. Inspect the pad yourself before acting on it.', 'uncertain_note': "The step(s) listed under 'uncertain' may already have committed: their outcome was not determined. Do not retry them blindly.", 'capabilities_note': 'This result carries pad capabilities. Treat it exactly like a successful creation result: it is a secret, and it must not be logged, pasted into a report or committed to evidence.'}, 'integrity': {'reference': 'the intended complete deposit, computed by this client', 'expected_head': '692b1296769f774cc5db94a8ae1c2fe976c9983718b5b61670932be8b1445911', 'acknowledged_prefix_head': '692b1296769f774cc5db94a8ae1c2fe976c9983718b5b61670932be8b1445911', 'acknowledged_prefix_note': "the head of the acknowledged prefix: NOT the intended complete deposit and NOT the daemon's head", 'server_head_hash': '092b1296769f774cc5db94a8ae1c2fe976c9983718b5b61670932be8b1445911', 'checked': 'every append acknowledgment and the seal response', 'suffix': 'head'}}
+
+=== case: payload-swapped ===
+  deposit returned an error : True
+  error (capabilities scrubbed): {'error': {'status': 0, 'kind': 'verification_failed', 'cause': '<redacted: 30 chars>', 'detail': 'append 2 was acknowledged with a hash that does not match the bytes this client submitted.'}, 'pad_id': '<redacted>', 'partial': {'status': 'partial', 'acknowledged': ['create', 'append 0', 'append 1'], 'uncertain': ['append 2'], 'recovery': '<redacted: 21 chars>', 'capabilities': '<redacted>', 'automatic_recovery': False, 'note': 'An acknowledgment means the daemon answered for that step. It is not proof that the bytes are durably stored, still available, or readable.', 'continuation': 'Do not continue, retry, replay or compensate automatically after a verification failure: the acknowledged steps are not confirmed to hold the bytes submitted. Inspect the pad before acting. Nothing is retried, replayed, compensated or deleted, and no automatic continuation is performed. Inspect the pad yourself before acting on it.', 'uncertain_note': "The step(s) listed under 'uncertain' may already have committed: their outcome was not determined. Do not retry them blindly.", 'capabilities_note': 'This result carries pad capabilities. Treat it exactly like a successful creation result: it is a secret, and it must not be logged, pasted into a report or committed to evidence.'}, 'integrity': {'reference': 'the intended complete deposit, computed by this client', 'expected_head': '692b1296769f774cc5db94a8ae1c2fe976c9983718b5b61670932be8b1445911', 'acknowledged_prefix_head': '427c6e4115b7da2ccd335cbc4da7fd1e3395e2ac480ca50c1d790fd8fd0d99cf', 'acknowledged_prefix_note': "the head of the acknowledged prefix: NOT the intended complete deposit and NOT the daemon's head", 'server_head_hash': None, 'checked': 'every append acknowledgment and the seal response', 'suffix': 'acknowledgment'}}
+
+=== case: rewritten-chain ===
+  deposit returned an error : False
+  returned head matches the chain computed from the SUBMITTED bytes: True
+  client-reported head source: 'locally_computed' (absent = the client says nothing about provenance)
+  daemon stored exactly the bytes submitted: True
+  daemon's stored chain equals the locally computed chain: True
+  rewritten (rehashed) head  : a182152c6bfb0199…
+  reader verdict against the returned reference: error:verification_failed
+  reader received blocks     : False
+
+Summary
+  honest               deposit=head==local      stored_as_sent=True  reader=trusted_head_match
+  ack-rewritten        deposit=ERROR            stored_as_sent=False  reader=None
+  seal-head-rewritten  deposit=ERROR            stored_as_sent=True  reader=None
+  payload-swapped      deposit=ERROR            stored_as_sent=False  reader=None
+  rewritten-chain      deposit=head==local      stored_as_sent=True  reader=error:verification_failed

@@ -5,6 +5,69 @@ not standing facts — re-observe before relying on them. Deployment state is
 deliberately kept out of the installation instructions in `README.md` because it
 goes stale faster than the code does.
 
+## 0.1.5
+
+**The writer's reference is now its own, and a failed deposit returns what it can.** No
+hash-format, schema or stored-data change; read the compatibility note at the end.
+
+- **`locker_deposit` returned the daemon's seal-response head without checking it against
+  the bytes it submitted, and accepted each append acknowledgment unchecked.** Measured
+  with an injecting HTTP shim in front of a real daemon, driving the client's own code
+  path: a shim that stored *different bytes* than the writer sent — and acknowledged them
+  honestly — produced a successful deposit, and the reference the caller then retained
+  reported `trusted_head_match` when reading content the writer never submitted. The client
+  now encodes the envelope and each artifact once, computes the expected chain from exactly
+  those outgoing bytes, checks every acknowledgment's `seq` and `curr_hash` and the seal
+  response against it, and returns that locally computed value as `head_hash` with
+  `head_source: "locally_computed"` and the daemon's own value beside it as
+  `server_head_hash`. Against an honest daemon the two agree, so a successful deposit is
+  unchanged. A disagreement is an explicit `verification_failed` refusal — nothing is
+  retried, compensated or claimed undone.
+
+- **The deposit tool no longer describes itself as atomic.** It is a sequence of
+  independently committed requests. The description now says so, states the partial-success
+  risk, and states what verification does not establish. `locker_append` and `locker_seal`
+  now say plainly that their results are the daemon's assertion, because without the pad's
+  prior chain state the client has nothing to recompute against.
+
+- **A failed deposit now returns the capabilities it received, in a structured block.**
+  The `error` indicator is unchanged, so callers that branch on it keep working, and the
+  ordinary success shape is never returned for a failure. Alongside the error, every
+  failure carries `partial`: a `status` (`not_created` / `partial` / `unknown`), a stable
+  `cause`, the steps `acknowledged`, the steps `uncertain`, a `recovery` classification, the
+  `capabilities` when they were genuinely received (else `null`), and
+  `automatic_recovery: false`. A lost create response is reported as an **unknown** outcome
+  with recovery unavailable through this API, because nothing was received to hand back. A
+  lost seal response is reported as **uncertain** — the pad may already be sealed — and
+  never as "still open". An uncertain append may already have committed and the result says
+  not to retry it blindly.
+
+  **[C] A capability-bearing error result is as sensitive as a successful creation
+  result.** It goes only to the caller that made the request: never a log line, an exception
+  string, captured evidence or a report.
+
+- **A shipped CLI defect, found while reconciling the reviewed baseline.** Read tickets are
+  URL-safe base64, so about one in sixty-four begins with `-`, and
+  `scripts/inspect_pad.py --ticket <value>` then failed at argument parsing. The script now
+  accepts that form. This also made one baseline test fail nondeterministically.
+
+**[C] What the check does and does not prove.** It establishes that the daemon's account of
+the bytes agrees with the bytes the writer submitted. It does **not** establish durable
+storage, availability, writer identity, the truth of the payload, or task completion. A
+later reader can check the bytes it retrieves against a reference it was given
+independently, and that remains the only way to detect a comprehensive rewrite.
+
+**[C] Compatibility.** Additive only. Successful deposits keep their existing keys and add
+`head_source` and `server_head_hash`; failures keep the `error` object they always had and
+add `partial`. Nothing is removed, no daemon API changed, no stored data changed, and the
+hash format is untouched. `locker_create`, `locker_append` and `locker_seal` are unchanged
+apart from their descriptions.
+
+**[C] Operational note, measured.** `aiosqlite` logs bound SQL parameters at `DEBUG`, and
+those parameters include read tickets. Running a live daemon at `DEBUG` therefore writes
+capability material into its log. Keep the daemon at `INFO` or above, or quiet the
+`aiosqlite` logger; the exposure and its mitigation are both pinned by a test.
+
 ## 0.1.4
 
 **Data-integrity fix, plus a request-body limit and a seal check.** Read the first item

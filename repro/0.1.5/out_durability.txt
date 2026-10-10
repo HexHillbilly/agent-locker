@@ -1,0 +1,33 @@
+=== settings observed from a separate connection ===
+  journal_mode (file property, so the daemon's)             : wal
+  synchronous (a NEW connection: the default, NOT the daemon's): 2
+  busy_timeout (stdlib default, not configured by the daemon): 5000
+  Daemon's own store connection sets (from lockerd/db.py connect()):
+    PRAGMA journal_mode = WAL / foreign_keys = ON / synchronous = NORMAL
+
+=== 6 appends acknowledged, then sealed ===
+  seal head        : a06cf4e0e7b983c1…  state=sealed
+    ack seq=0 curr_hash=845d77cc195e6b50…
+    ack seq=1 curr_hash=4970633692cbcb4a…
+    ack seq=2 curr_hash=cb655db4d4be8fe1…
+    ack seq=3 curr_hash=0fc81842f6185ee9…
+    ack seq=4 curr_hash=c6bbebfd315a46f2…
+    ack seq=5 curr_hash=a06cf4e0e7b983c1…
+
+=== SIGKILL the daemon process (no graceful shutdown) ===
+  killed pid 2650707 with SIGKILL; exit status -9
+
+=== restart on the same database and read back ===
+  manifest state   : sealed  blocks=6
+  head after restart: a06cf4e0e7b983c1…
+  head survived    : True
+  acknowledged blocks missing or changed: none
+
+  RESULT: every acknowledged write survived a process kill: True
+
+=== files present next to the database ===
+  repro_dura_ydby32y7.db       exists=True  bytes=4096
+  repro_dura_ydby32y7.db-wal   exists=True  bytes=304912
+  repro_dura_ydby32y7.db-shm   exists=True  bytes=32768
+
+NOTE: this is a process-kill test. It does not measure OS or power-loss durability; see the findings for what `synchronous = NORMAL` does and does not promise.

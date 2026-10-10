@@ -1,0 +1,30 @@
+=== 6 distinct value(s) to characterise ===
+
+--- value 26f79d12 (length 43) ---
+    tests/test_lockerd.py: async def <VALUE>(client):
+      context: ...key']}"},     )     assert r.status_code == 422   # ---- block 0 allowed_paths (optional, type-checked) ----  async def <VALUE>(client):     d = await create_pad(client)     assert (await append(client,
+      in the PUBLISHED 0.1.4 sdist: ['lockermcp-0.1.4/tests/test_lockerd.py']
+
+--- value 271596a3 (length 43) ---
+    (not present in the working tree; historical only)
+      in the PUBLISHED 0.1.4 sdist: no
+
+--- value 35930647 (length 43) ---
+    tests/test_hardening.py: async def <VALUE>(client):
+      context: ...notexist/append", content=b"x")     assert r.status_code == 404     assert r.json()["error"] == "not_found"   async def <VALUE>(client):     d = await create_pad(client)     r = await client.post(f"/v1/
+      in the PUBLISHED 0.1.4 sdist: ['lockermcp-0.1.4/tests/test_hardening.py']
+
+--- value af07dc9a (length 43) ---
+    tests/test_post_012_findings.py: def <VALUE>(daemon):
+      context: ...ntegrity"]["expected_head"]["matches"] is None     assert base64.b64decode(r["blocks"][1]["payload_b64"]) == REAL   def <VALUE>(daemon):     base, _, _ = daemon     pad_id, ticket, head = _sealed_pad(ba
+      in the PUBLISHED 0.1.4 sdist: ['lockermcp-0.1.4/tests/test_post_012_findings.py']
+
+--- value bf613d02 (length 32) ---
+    (not present in the working tree; historical only)
+      in the PUBLISHED 0.1.4 sdist: no
+
+--- value e49c4bcc (length 43) ---
+    tests/test_deposit_recovery.py: def <VALUE>(deposit_daemon, injecting):
+      context: ...cknowledged_prefix_note"]   # ------------------------------------------------------- 7. existing error signal ---  def <VALUE>(deposit_daemon, injecting):     """Callers that branch on `error` must kee
+      in the PUBLISHED 0.1.4 sdist: no
+

@@ -8,6 +8,27 @@ server (`lockermcp`) so AI agents can drive it natively.
 Python / FastAPI + aiosqlite (single-file SQLite, WAL mode). No Redis, no S3,
 no external services.
 
+## What the names mean
+
+Three names appear throughout, and they are not interchangeable:
+
+- **Padlock** — the product: the tamper-evident handoff locker described here.
+- **`lockermcp`** — the distribution on the package index, **and** the MCP client
+  inside it (the stdio server an agent talks to). When this document says "the
+  client", it means this.
+- **`lockerd`** — the daemon that stores pads. It is the thing the client talks to
+  over HTTP, and it is the only component that holds data.
+
+One package ships both `lockermcp` and `lockerd`; they are separate processes and
+can run on different machines. `agent-locker` is the repository name.
+
+Documentation lives in the repository, since the package index renders only this
+file:
+
+- Release notes — <https://github.com/HexHillbilly/agent-locker/blob/main/RELEASE_NOTES.md>
+- Security notes for the current release — <https://github.com/HexHillbilly/agent-locker/blob/main/SECURITY-NOTES-0.1.4.md>
+- Lifecycle policy (what expires, what is never deleted) — <https://github.com/HexHillbilly/agent-locker/blob/main/PHASE4-LIFECYCLE-POLICY.md>
+
 ## Three ways to use this project
 
 They differ in what you get, not in how the daemon behaves.
@@ -48,7 +69,7 @@ lockermcp          # MCP server (stdio)
 ### B. From the source distribution
 
 ```bash
-tar xzf lockermcp-0.1.4.tar.gz && cd lockermcp-0.1.4
+tar xzf lockermcp-0.1.5.tar.gz && cd lockermcp-0.1.5
 python -m venv .venv && source .venv/bin/activate
 pip install .
 ```
@@ -76,7 +97,18 @@ See `.env.example` for every runtime variable.
 ## Configure an MCP client
 
 `lockermcp` is a thin client: it talks to a running daemon and its only required
-configuration is `LOCKER_URL`, the daemon's base URL.
+configuration is `LOCKER_URL`, the daemon's base URL. Two setups are common and
+they are not equivalent:
+
+- **Local daemon** (the default below). You run `lockerd` yourself and point the
+  client at `http://127.0.0.1:8000`. You control the process and the database
+  file.
+- **Remote daemon.** Point `LOCKER_URL` at someone else's daemon and the client
+  works unchanged. Everything the daemon reports is then that operator's claim:
+  the client verifies the served chain and can compare a head you already hold,
+  but it cannot prove the host kept what it acknowledged, cannot see a pad it was
+  never given a ticket for, and cannot recover one. Use a remote daemon only if
+  you already trust the channel you got the reference through.
 
 ```json
 {
@@ -460,20 +492,71 @@ this API.
 credentials for". Do not retry blindly: a retry creates a second pad, and the first one
 stays. Record the failure, and account for the possibility of orphans.
 
-**[U] A recovery contract is an open design question, deliberately not implemented.** A
-partial remote success that returns capabilities to the caller needs a stated design —
-what the caller receives, when, and on which failure classes — before any code. A
-proposal is recorded in `SECURITY-NOTES-0.1.4.md`. Nothing in this release creates,
-deletes, compensates, replays or repairs anything on a caller's behalf.
+**[S] The head a deposit returns is computed by the client, not asserted by the daemon.**
+`locker_deposit` encodes the envelope and each artifact once, computes the expected chain
+from those exact outgoing bytes, and checks every append acknowledgment and the seal
+response against it before returning success. `head_hash` in the result is that locally
+computed value, and `head_source: "locally_computed"` says so; the daemon's own value is
+retained beside it as `server_head_hash` so agreement is visible rather than assumed. A
+disagreement is an explicit `verification_failed` / `append_acknowledgment_mismatch` or
+`seal_head_mismatch` failure — never a silent retry, and never a claim that the remote work
+was undone. Because the pad exists by then, this is one more way a deposit can end with a
+pad whose capabilities were not returned.
+
+**[S] What a successful deposit establishes, precisely.** The writer computes its reference
+from the exact outgoing bytes — the envelope and each artifact are encoded once, and the
+chain is derived from *those* bytes with the same construction the daemon uses. The server's
+acknowledgments, and the final seal response, are checked against that reference before
+success is reported. A later reader can then check the bytes it retrieves against a
+reference it was given independently. Matching acknowledgments do **not** establish durable
+storage, availability, writer identity, the truth of the payload, or task completion; they
+establish that the daemon's account of the bytes agrees with the bytes the writer sent.
+
+Against an honest daemon the two values agree, so a successful deposit behaves exactly as
+before. `locker_append` and `locker_seal` cannot check their own
+acknowledgments — without the pad's prior head the client has no chain to recompute — so
+their results remain the host's assertion, and their descriptions say so.
+
+**What a failed deposit returns (0.1.5).** The `error` indicator is unchanged, so callers
+that branch on it keep working, and the ordinary successful-deposit shape is never returned
+for a failed operation. Alongside it, every failure now carries a structured `partial` block:
+
+| Field | Meaning |
+|---|---|
+| `status` | `not_created` (the daemon refused; nothing exists), `partial` (a pad exists and the sequence stopped), or `unknown` (the create outcome could not be determined) |
+| `cause` | a stable discriminator, present whichever error shape the failure produced |
+| `acknowledged` | steps the daemon answered for. **An acknowledgment is not proof of storage.** |
+| `uncertain` | steps whose outcome was not determined — they may already have committed |
+| `recovery` | `not_applicable`, `capabilities_returned`, or `capabilities_not_received` |
+| `capabilities` | `{pad_id, write_key, read_ticket}` when they were successfully received, else `null` |
+| `automatic_recovery` | always `false` |
+
+**[C] A capability-bearing error result is sensitive, exactly like a successful creation
+result.** It is returned only to the caller that made the request — never in a log, an
+exception string, captured evidence or a report — and it should be treated as a secret.
+When capabilities were never received the result says so and reports recovery as
+unavailable through this API: the pad, if it exists, cannot be read, written, sealed or
+removed by anyone.
+
+**[C] Nothing is continued, retried, replayed, compensated or deleted**, and after a
+verification failure the prohibition is explicit: the acknowledged steps are not confirmed
+to hold the bytes submitted, so inspect the pad before acting. A lost seal response is
+reported as *uncertain* — the pad may already be sealed — and never as "still open".
+Similarly, an uncertain append may already have committed and must not be retried blindly.
+
+**[U] Not implemented, deliberately:** no operator cleanup endpoint, no deletion mechanism,
+no automatic compensation, no automatic replay, and no idempotency key. The contract and its
+decisions are recorded in `SECURITY-NOTES-0.1.5.md` §4.
+behalf.
 
 ## MCP server (`lockermcp`)
 
 Six tools over stdio (Python MCP SDK v2, `MCPServer`):
 
-- `locker_deposit(envelope, artifacts, ttl_seconds=3600)` → `{pad_id, read_ticket, head_hash, status}` — create + append envelope + append artifacts + seal, in one tool call (recommended for one-shot handoffs; avoids multi-step batching hazards). **[C] It is one call, not one transaction:** it is a sequence of independent requests, and each one is atomic on its own. If a request in the middle fails, the pad already created stays where it is. Every artifact is therefore encoded and type-checked *before* the pad is created, so a bad artifact cannot leave an orphan behind — but the daemon's own checks (envelope shape, per-block and per-pad size limits) are only reachable after creation, so those can still fail part-way. Treat a deposit that raises as "a pad may exist that I do not have credentials for", and see "Partial deposit" below.
+- `locker_deposit(envelope, artifacts, ttl_seconds=3600)` → `{pad_id, read_ticket, head_hash, head_source, server_head_hash, status}` — create + append envelope + append artifacts + seal, in one tool call (recommended for one-shot handoffs; avoids multi-step batching hazards). **[C] It is one call, not one transaction:** it is a sequence of independent requests, and each one is atomic on its own. If a request in the middle fails, the pad already created stays where it is. Every artifact is therefore encoded and type-checked *before* the pad is created, so a bad artifact cannot leave an orphan behind — but the daemon's own checks (envelope shape, per-block and per-pad size limits) are only reachable after creation, so those can still fail part-way. Treat a deposit that raises as "a pad may exist that I do not have credentials for", and see "Partial deposit" below.
 - `locker_create(ttl_seconds, max_blocks=32)` → `{pad_id, write_key, read_ticket}`
-- `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}`
-- `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}`
+- `locker_append(pad_id, write_key, payload, content_type="application/json")` → `{pad_id, seq, curr_hash}` — the acknowledgment as the daemon asserted it; this call cannot verify it (no prior chain state)
+- `locker_seal(pad_id, write_key)` → `{pad_id, state, sealed_at, head_hash}` — likewise the daemon's assertion; use `locker_deposit` when you need a head this client computed
 - `locker_manifest(pad_id, ticket=None, expected_head_hash=None)` → manifest (free on the daemon)
 - `locker_read_blocks(pad_id, ticket, from_block=0, to_block=0, expected_head_hash=None)` → blocks slice
 

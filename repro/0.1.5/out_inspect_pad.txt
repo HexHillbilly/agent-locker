@@ -1,0 +1,8 @@
+ticket          : <redacted: 43 chars>
+argv[3]         : <redacted: --ticket's flag>
+ticket starts - : False
+returncode      : 0
+stderr          : 
+stdout first 3  : ['pad           <pad_id>', '  state        sealed', '  blocks       2']
+ticket in output: False
+(the ticket value is never printed by this script)

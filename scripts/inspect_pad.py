@@ -71,13 +71,39 @@ def verify_chain(blocks, head_hash):
     return (verified == len(blocks)) and (prev == head_hash), verified
 
 
+def _normalize_argv(argv: list[str]) -> list[str]:
+    """Make ``--ticket=<value>`` out of ``--ticket <value>`` when the value starts with "-".
+
+    Read tickets are ``secrets.token_urlsafe(32)``, i.e. URL-safe base64, so ``-`` is in the
+    alphabet and a ticket really can begin with one. argparse reads a value that begins with
+    a dash as an option and fails with "expected one argument", so roughly one ticket in 64
+    could not be passed in the space-separated form. Measured on this build: a ticket
+    ``-Ot9gmg44gUrGWlRFmVv0QDYYo8F0IGvK82LL2vAf4`` returns exit 2 while the same ticket in
+    the ``--ticket=`` form exits 0. This normalises the former into the latter; every other
+    argument is passed through untouched.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if (arg in ("--ticket", "-t") and index + 1 < len(argv)
+                and argv[index + 1].startswith("-")):
+            out.append(f"--ticket={argv[index + 1]}")
+            index += 2
+            continue
+        out.append(arg)
+        index += 1
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="Inspect a locker pad and verify its hash chain.")
     ap.add_argument("pad_id", help="pad id to inspect")
     ap.add_argument("--ticket", "-t", default=None,
-                    help="read ticket (required to verify the chain)")
+                    help="read ticket (required to verify the chain; a value beginning with "
+                         "a dash is accepted in either form)")
     ap.add_argument("--url", default="http://127.0.0.1:8000", help="daemon base URL")
-    args = ap.parse_args()
+    args = ap.parse_args(_normalize_argv(sys.argv[1:]))
 
     base = args.url.rstrip("/")
     try:

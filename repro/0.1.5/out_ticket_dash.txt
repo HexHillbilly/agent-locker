@@ -1,0 +1,6 @@
+tickets drawn until one begins with '-': 36
+ticket                 : <redacted: 43 chars>  starts with '-': True
+returncode             : 0
+stderr                 : 
+with --ticket=<value>  : returncode 0
+RESULT: space-separated form exit 0, '=' form exit 0. Pre-fix the first was 2 at argparse; post-fix both should be 0.

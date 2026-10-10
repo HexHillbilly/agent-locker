@@ -1,0 +1,54 @@
+# NOTE: a pad identifier that appeared in a transport-error URL was redacted from
+# this captured output after the fact. Capabilities and pad identifiers must not
+# appear in captured evidence. Nothing else in the file was changed.
+seeded demo pad demo-pad-v1 (3 blocks)
+=== MCP tool metadata as the model sees it ===
+  locker_create: Create a new locker pad. Returns pad_id, write_key, and read_ticket. Save these — you MUST reuse the returned pad_id and write_key (never invent your own) for every later append and seal. Must be call
+  locker_append: Append ONE block to an existing pad (pass the real pad_id and write_key from locker_create). The very first append is Block 0 and MUST be a locker.handoff.v1 envelope object with exactly these fields:
+  locker_seal: Seal the pad to finalize it (pass the pad_id and write_key from locker_create). After sealing, further appends are rejected.
+  locker_deposit: Atomically create a pad, write the envelope (Block 0), write each artifact as a block (Block 1+), and seal — all in one call. envelope must be a locker.handoff.v1 envelope dict with exactly: schema='l  <-- claims atomicity
+  locker_manifest: Read pad metadata: state, block count, total bytes, sealed_at, head hash. Pass a read_ticket to also verify the hash chain and receive an integrity block. Pass expected_head_hash (a 64-character lower
+  locker_read_blocks: Read blocks from a pad using the read_ticket. Defaults to Block 0 (the envelope). Read Block 0 first, then call again with from_block=1 and a larger to_block to get the payload. Every result includes 
+
+=== partial-deposit failure points ===
+seeded demo pad demo-pad-v1 (3 blocks)
+seeded demo pad demo-pad-v1 (3 blocks)
+seeded demo pad demo-pad-v1 (3 blocks)
+seeded demo pad demo-pad-v1 (3 blocks)
+
+  case: before creation
+    caller received            : error object
+    error returned             : {'status': 503, 'detail': 'locker daemon error 503: shim refused before forwarding'}
+    capabilities in the result : none
+    on the daemon              : nothing created
+
+  case: envelope append
+    caller received            : error object
+    error returned             : {'status': 500, 'detail': 'locker daemon error 500: shim failed after forwarding'}
+    capabilities in the result : none
+    on the daemon              : pad fa5fd40f262d… state=open blocks=1 tickets=1 head=4f4d97b5807b…
+
+  case: artifact append
+    caller received            : error object
+    error returned             : {'status': 500, 'detail': 'locker daemon error 500: shim failed after forwarding'}
+    capabilities in the result : none
+    on the daemon              : pad e5694d9d7fc7… state=open blocks=2 tickets=1 head=d7028e134f3a…
+
+  case: sealing
+    caller received            : error object
+    error returned             : {'status': 500, 'detail': 'locker daemon error 500: shim failed after forwarding'}
+    capabilities in the result : none
+    on the daemon              : pad 2f4bd8592955… state=sealed blocks=3 tickets=1 head=9812fe03f951…
+
+  case: seal response lost
+    caller received            : error object
+    error returned             : {'status': 0, 'detail': 'locker daemon error 0: RemoteProtocolError contacting http://127.0.0.1:53431/v1/pads/<pad_id>/seal'}
+    capabilities in the result : none
+    on the daemon              : pad d6d1d7140faf… state=sealed blocks=3 tickets=1 head=9812fe03f951…
+
+Summary
+  before creation      caller=error object caps=0 remote_pads=0 state=-
+  envelope append      caller=error object caps=0 remote_pads=1 state=open
+  artifact append      caller=error object caps=0 remote_pads=1 state=open
+  sealing              caller=error object caps=0 remote_pads=1 state=sealed
+  seal response lost   caller=error object caps=0 remote_pads=1 state=sealed

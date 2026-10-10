@@ -1,0 +1,1189 @@
+=== url-safe runs of 16..42 chars in historical blobs, none of them benign ===
+  .env.example
+      run 5b3b56ac (x8)  in: #                          <RUN>, BASE_RPC_URL, REQUIRED_USDC_UNITS, USDC_CONTRACT
+  .env.example
+      run 685a994e (x8)  in: #                          PAYMENT_WALLET_ADDRESS, BASE_RPC_URL, <RUN>, USDC_CONTRACT
+  .env.example
+      run a07d0e93 (x8)  in: # Daemon (lockerd) reads:  LOCKER_MODE, LOCKER_DB_PATH, <RUN>,
+  .env.example
+      run a674ffd2 (x4)  in: USDC_CONTRACT=<RUN>
+  LICENSE
+      run 3b67f9e7 (x4)  in: c) Prohibiting <RUN> of the origin of that material, or
+  LICENSE
+      run 7c62a2b5 (x4)  in: 3. Protecting Users' Legal Rights From <RUN> Law.
+  LICENSE
+      run e14d1c6e (x4)  in: <RUN> Corresponding Source under the terms of this License,
+  MANIFEST.in
+      run 3e347d7c (x4)  in: # <RUN> contents.
+  PHASE4-LIFECYCLE-POLICY.md
+      run 0031892c (x4)  in: 2. Every request reaching the daemon comes from the proxy — a <RUN>
+  PHASE4-LIFECYCLE-POLICY.md
+      run 01c25f30 (x8)  in: **[S] Payment receipts.** `payment_receipts.tx_hash` is the <RUN> key
+  PHASE4-LIFECYCLE-POLICY.md
+      run 0dff1285 (x4)  in: | **Current [S]** | The operator holds host-side backups (`/root/padlockspace-backup-*.tar.gz`, `/root/padlock
+  PHASE4-LIFECYCLE-POLICY.md
+      run 13dc5645 (x4)  in: the daemon.** **[U]** No <RUN> handling: nothing reads
+  PHASE4-LIFECYCLE-POLICY.md
+      run 1a574980 (x4)  in: | **Current [S]** | The operator holds host-side backups (`/root/padlockspace-backup-*.tar.gz`, `/root/<RUN>*`
+  PHASE4-LIFECYCLE-POLICY.md
+      run 232250d1 (x12)  in: - `<RUN>` runs `UPDATE pads SET state='expired' WHERE id=? AND
+  PHASE4-LIFECYCLE-POLICY.md
+      run 300e223f (x4)  in: | **Options** | **(a)** Add `tickets.revoked_at`, checked in `check_ticket`, plus `DELETE`-style revoke endpoi
+  PHASE4-LIFECYCLE-POLICY.md
+      run 316147be (x4)  in: (`has_receipt(tx_hash)` guards `<RUN>`). Receipts are never
+  PHASE4-LIFECYCLE-POLICY.md
+      run 3e11b496 (x4)  in: `now() - lease_started_at > <RUN>` (default 600s). `read_unlimited`
+  PHASE4-LIFECYCLE-POLICY.md
+      run 68c10a6a (x4)  in: | **Options** | **(a)** Keep as is — "expiry stops writes, not reads". **(b)** Refuse reads on `state='expired
+  PHASE4-LIFECYCLE-POLICY.md
+      run 6a40e889 (x4)  in: | **Options** | **(a)** Keep receipts indefinitely (unbounded, small rows). **(b)** Retain receipts for a defi
+  PHASE4-LIFECYCLE-POLICY.md
+      run a07d0e93 (x4)  in: | **Current [S]** | `read_once`: lease opens on the first successful read and lasts `<RUN>` (default 600s); re
+  PHASE4-LIFECYCLE-POLICY.md
+      run a0ad7235 (x20)  in: | `<RUN>` | `tx_hash` PK, `pad_id → pads(id)`, `amount_units`, `payer_address`, `created_at` |
+  PHASE4-LIFECYCLE-POLICY.md
+      run c4dc25b7 (x4)  in: (`<RUN>`) and `max_blocks` (default 32, sanity cap 4096), per response
+  PHASE4-LIFECYCLE-POLICY.md
+      run d2e3ab3b (x4)  in: | **Options** | **(a)** Add `tickets.revoked_at`, checked in `check_ticket`, plus `DELETE`-style revoke endpoi
+  PHASE4-LIFECYCLE-POLICY.md
+      run d3c15337 (x4)  in: |-------|<RUN>|
+  PHASE4-LIFECYCLE-POLICY.md
+      run d57df6da (x12)  in: | `tickets` | `ticket_id` PK, `pad_id → pads(id)`, `type ∈ {read_once, read_unlimited}`, `redeemed_count`, `ma
+  PHASE4-LIFECYCLE-POLICY.md
+      run da5ec138 (x8)  in: | **Decision [C]** | Should an expired pad still be readable? The current answer is yes, which is currently **
+  PHASE4-LIFECYCLE-POLICY.md
+      run e3c1754a (x4)  in: ### 2.6 <RUN> record retention
+  PHASE4-LIFECYCLE-POLICY.md
+      run fa55ebb2 (x4)  in: | **Current [S]** | The operator holds host-side backups (`/root/<RUN>*.tar.gz`, `/root/padlockspace-prev-*`) 
+  PHASE4-LIFECYCLE-POLICY.md
+      run ff820db5 (x4)  in: **[C] Decision required.** This is the single <RUN> lifecycle
+  README.md
+      run 01c25f30 (x4)  in: the <RUN> key; deleting payloads must never delete or shorten it.
+  README.md
+      run 0203dc24 (x8)  in: for its single <RUN> read, so a poll and a write do serialize briefly at that
+  README.md
+      run 0cc8bcdc (x3)  in: that branch on it keep working, and the ordinary <RUN> shape is never returned
+  README.md
+      run 123c1803 (x8)  in: | `POST /v1/pads` | small JSON (`ttl_seconds`, `max_blocks`) | 4 KB (`<RUN>`) |
+  README.md
+      run 1ee36f23 (x8)  in: python scripts/<RUN>.py
+  README.md
+      run 2b549480 (x4)  in: | `<RUN>` | `header` | how `lockermcp` presents a read ticket: `header` sends `Authorization: Bearer <ticket>`
+  README.md
+      run 2d2f5c20 (x4)  in: stored payloads. A pad that fails is refused with `409 <RUN>` and left exactly
+  README.md
+      run 2e85ba77 (x4)  in: an empty pad and a withheld pad are <RUN>, and a consistent prefix
+  README.md
+      run 3af3b0e4 (x4)  in: reported as a verified read. It is not <RUN> bound, so it constrains a
+  README.md
+      run 3fe16540 (x4)  in: tail data discarded looks exactly like a <RUN> chain, because a pad keeps
+  README.md
+      run 44f48717 (x4)  in: `<RUN>: X402 …` header.
+  README.md
+      run 5b3b56ac (x8)  in: `<RUN>` for ≥ `REQUIRED_USDC_UNITS`, then records the tx in the
+  README.md
+      run 6262408b (x3)  in: **[C] A <RUN> error result is sensitive, exactly like a successful creation
+  README.md
+      run 6705f50a (x16)  in: - `<RUN>(pad_id, ticket, from_block=0, to_block=0, expected_head_hash=None)` → blocks slice
+  README.md
+      run 685a994e (x8)  in: `PAYMENT_WALLET_ADDRESS` for ≥ `<RUN>`, then records the tx in the
+  README.md
+      run 69763c8d (x4)  in: can rewrite both the chain and the head it serves; <RUN> against a
+  README.md
+      run 7cf91f65 (x32)  in: `<RUN>`; see *Trusted-head verification* below.
+  README.md
+      run 7ec0f7e0 (x9)  in: - Security notes for the current release — <https://github.com/HexHillbilly/agent-locker/blob/main/<RUN>.1.4.m
+  README.md
+      run a07d0e93 (x12)  in: successful `/blocks` read opens a window of `<RUN>`
+  README.md
+      run a0ad7235 (x4)  in: append-only `<RUN>` table (`tx_hash` is the primary key → replay-proof).
+  README.md
+      run abc3d446 (x4)  in: Over the limit is `413 <RUN>`, and the request is refused before any pad,
+  README.md
+      run c90be36c (x4)  in: - Lifecycle policy (what expires, what is never deleted) — <https://github.com/HexHillbilly/agent-locker/blob/
+  README.md
+      run cacc35aa (x4)  in: "<RUN>": "requirements.txt",
+  README.md
+      run ceab63c8 (x4)  in: |------|--------|<RUN>|
+  README.md
+      run d57df6da (x4)  in: - The DB schema carries a `tickets.<RUN>` column; the DB file is
+  README.md
+      run d9de1caf (x4)  in: - **Backups.** <RUN> and outside the daemon. Deleting data from a live
+  README.md
+      run df35afb3 (x4)  in: <RUN> by the client before blocks enter LLM context, which prevents
+  README.md
+      run e14d1c6e (x4)  in: python scripts/check_integrity.py /path/to/locker.db --json # <RUN>
+  README.md
+      run e4e83e05 (x8)  in: `<RUN>`: status `0x1`, a USDC `Transfer` event to
+  README.md
+      run f83e3a36 (x12)  in: supplied by the caller, `<RUN>` states: a contiguous chain from
+  README.md
+      run f95813f7 (x4)  in: | `manifest_head` | asserted by the daemon queried | `<RUN>` is **true only** when a full chain was walked and
+  RELEASE-CANDIDATE-0.1.3.md
+      run 1ee36f23 (x4)  in: | `scripts/<RUN>.py` (MCP end-to-end) | PASSED |
+  RELEASE-CANDIDATE-0.1.3.md
+      run 2ed5a7b9 (x4)  in: artifact sha256 above, not any member digest, and not the commit — <RUN>
+  RELEASE-CANDIDATE-0.1.3.md
+      run 4bed675d (x4)  in: | Member-content digests | `<RUN>.1.3.txt` (17 wheel members, 40 sdist members), sha256 `e2b9970497a2efa6b278f
+  RELEASE-CANDIDATE-0.1.3.md
+      run 50ecfa0d (x4)  in: <RUN> excerpt appears in the error.
+  RELEASE-CANDIDATE-0.1.3.md
+      run 629a7e21 (x4)  in: | Finding A | A detected <RUN> failure now returns an error and no payloads, whether or not `expected_head_has
+  RELEASE-CANDIDATE-0.1.3.md
+      run 64b2e3df (x4)  in: *input* to the <RUN> test, never the target a caller's reference is
+  RELEASE-CANDIDATE-0.1.3.md
+      run 65c63284 (x4)  in: | Source manifest | `<RUN>.json`, sha256 `5b25233f2b6157326134fc9d86ef3e11c26f325bbdfc784bbfe285ba33eefb52` |
+  RELEASE-CANDIDATE-0.1.3.md
+      run 7a716084 (x4)  in: | **Frozen source commit** | `<RUN>` |
+  RELEASE-CANDIDATE-0.1.3.md
+      run 7cf91f65 (x4)  in: | Finding A | A detected chain-verification failure now returns an error and no payloads, whether or not `<RUN
+  RELEASE-CANDIDATE-0.1.3.md
+      run 94c9a942 (x4)  in: | Parent / released baseline | `<RUN>` (the `v0.1.2` tag target) |
+  RELEASE-CANDIDATE-0.1.3.md
+      run a5552c34 (x4)  in: | Provenance record | `<RUN>.json` |
+  RELEASE-CANDIDATE-0.1.3.md
+      run e42935db (x4)  in: | `tests/<RUN>.py` (focused) | 17 passed |
+  RELEASE-CANDIDATE-0.1.3.md
+      run ee89ec09 (x4)  in: - the <RUN> references (0.1.2 → 0.1.3), and
+  RELEASE-CANDIDATE-0.1.3.md
+      run f95813f7 (x4)  in: `manifest_head` (marked `<RUN>: false` unless a full chain was walked and
+  RELEASE-CANDIDATE-0.1.5.md
+      run 1d465147 (x1)  in: The <RUN> run exercises the wheel, not the checkout: provenance, version,
+  RELEASE-CANDIDATE-0.1.5.md
+      run 20e8968e (x1)  in: | Source manifest | `<RUN>.json`, sha256 `166547f29c87b3ccc7d0a82772bd65be2cb2518f9abab7402d226936342faad2` |
+  RELEASE-CANDIDATE-0.1.5.md
+      run 4508936d (x1)  in: | Full test suite | **208 passed** (baseline at the reviewed commit: 184 passed + 1 <RUN> failure) |
+  RELEASE-CANDIDATE-0.1.5.md
+      run 4bed675d (x1)  in: Supplementary: `<RUN>.1.5.txt` (sha256
+  RELEASE-CANDIDATE-0.1.5.md
+      run 69f8848a (x1)  in: | Installed-artifact checks, fresh venv outside the checkout | **41/41 passed** — `<RUN>.1.5.txt` |
+  RELEASE-CANDIDATE-0.1.5.md
+      run 7c7d8aa0 (x1)  in: the pad's prior head there is no chain to recompute. An optional `<RUN>` would
+  RELEASE-CANDIDATE-0.1.5.md
+      run 9211522c (x1)  in: | <RUN> checks, fresh venv outside the checkout | **41/41 passed** — `INSTALLED-VERIFICATION-0.1.5.txt` |
+  RELEASE-CANDIDATE-0.1.5.md
+      run ccb9a7d7 (x1)  in: | Build-source commit | `<RUN>` |
+  RELEASE-CANDIDATE-0.1.5.md
+      run e0134b41 (x1)  in: | Branch | `security/0.1.<RUN>` (off the reviewed baseline `d59efac`) |
+  RELEASE-CANDIDATE-0.1.5.md
+      run e6739566 (x1)  in: | Provenance | `<RUN>.json` |
+  RELEASE-CANDIDATE-0.1.5.md
+      run ef7f8cb0 (x1)  in: | Reproduction evidence | `repro/0.1.5/` — five scripts and their captured outputs, <RUN> |
+  RELEASE_NOTES.md
+      run 0203dc24 (x4)  in: read-only connection, and issues its remaining <RUN> read under the lock.
+  RELEASE_NOTES.md
+      run 27f6b149 (x4)  in: - **Documentation.** `README.md` now separates the <RUN>,
+  RELEASE_NOTES.md
+      run 2b549480 (x4)  in: tickets stay out of URLs and logs. `<RUN>=query` remains an
+  RELEASE_NOTES.md
+      run 2d2f5c20 (x4)  in: refuses with `409 <RUN>` if they do not hold — leaving the pad open and its
+  RELEASE_NOTES.md
+      run 3962c81b (x4)  in: into the packaging metadata (`<RUN>: AGPL-3.0-or-later`,
+  RELEASE_NOTES.md
+      run 3fe16540 (x4)  in: lost its tail looks exactly like a <RUN> chain, because a pad keeps no
+  RELEASE_NOTES.md
+      run 468b054c (x3)  in: accepts that form. This also made one baseline test fail <RUN>.
+  RELEASE_NOTES.md
+      run 51b11aaa (x4)  in: incomplete_retrieval` / `<RUN>`) instead of a verified read. The
+  RELEASE_NOTES.md
+      run 6262408b (x3)  in: **[C] A <RUN> error result is as sensitive as a successful creation
+  RELEASE_NOTES.md
+      run 6705f50a (x8)  in: (`<RUN>` without `expected_head_hash`) returned the tampered payloads
+  RELEASE_NOTES.md
+      run 7cf91f65 (x12)  in: (`locker_read_blocks` without `<RUN>`) returned the tampered payloads
+  RELEASE_NOTES.md
+      run 7d5b83d9 (x4)  in: <RUN> command that takes an explicit commit, builds from a fresh
+  RELEASE_NOTES.md
+      run 80bc7278 (x4)  in: <RUN> and repository workflows; documents the
+  RELEASE_NOTES.md
+      run 91258152 (x4)  in: <RUN>` / `inconsistent_blocks`) instead of a verified read. The
+  RELEASE_NOTES.md
+      run abc3d446 (x4)  in: the limit is `413 <RUN>`, refused before any pad, ticket, receipt or block
+  RELEASE_NOTES.md
+      run b85baf67 (x4)  in: pre-existing <RUN> path (`chain_valid: false`, blocks returned, no
+  RELEASE_NOTES.md
+      run f522f3a7 (x4)  in: Changes since `0.1.1`. Retention and <RUN> policy is deliberately
+  RELEASE_NOTES.md
+      run f83e3a36 (x1)  in: `<RUN>`, `internal_consistency_only`, `not_checked` or `failed` —
+  RELEASE_NOTES.md
+      run f83e3a36 (x6)  in: reported `<RUN>` when reading content the writer never submitted. The client
+  RELEASE_NOTES.md
+      run f95813f7 (x4)  in: `<RUN>: false` unless a full chain was walked and this client's own
+  SECURITY-NOTES-0.1.4.md
+      run 0130af9f (x8)  in: | `<RUN>` (**new**) | yes, once | yes — pad + ticket + optional receipt |
+  SECURITY-NOTES-0.1.4.md
+      run 0203dc24 (x12)  in: **[C] Chosen after inspecting every <RUN> user:** the append, create-pad,
+  SECURITY-NOTES-0.1.4.md
+      run 123c1803 (x4)  in: **[C] Fix:** both routes read at most `<RUN>` (**4 KB**) of *streamed* bytes
+  SECURITY-NOTES-0.1.4.md
+      run 232250d1 (x4)  in: | `<RUN>` | yes | yes |
+  SECURITY-NOTES-0.1.4.md
+      run 2d2f5c20 (x8)  in: <RUN>`; the pad stays `open` and its rows are untouched. **[C] Never repaired:**
+  SECURITY-NOTES-0.1.4.md
+      run 2db90c8c (x4)  in: <RUN> body are all accepted.
+  SECURITY-NOTES-0.1.4.md
+      run 2e85ba77 (x4)  in: later had acknowledged tail data discarded is <RUN> from a short-but-consistent
+  SECURITY-NOTES-0.1.4.md
+      run 316147be (x12)  in: receipt-only `<RUN>` was removed rather than left beside it, because two
+  SECURITY-NOTES-0.1.4.md
+      run 3203901c (x4)  in: `<RUN>`.
+  SECURITY-NOTES-0.1.4.md
+      run 33cfa888 (x4)  in: Valid requests are unaffected. <RUN> bodies are still `422`.
+  SECURITY-NOTES-0.1.4.md
+      run 3dbf0871 (x4)  in: **[S]** `POST /v1/pads` and `POST /v1/pads/{id}/tickets` took <RUN> JSON body
+  SECURITY-NOTES-0.1.4.md
+      run 3fe16540 (x4)  in: later had acknowledged tail data discarded is indistinguishable from a <RUN>
+  SECURITY-NOTES-0.1.4.md
+      run 6427b020 (x4)  in: reported symptom — but not the <RUN> failure above, and not the
+  SECURITY-NOTES-0.1.4.md
+      run 6ce4b0ee (x4)  in: `sqlite3.<RUN>: cannot commit transaction - SQL statements in progress` —
+  SECURITY-NOTES-0.1.4.md
+      run 728d0469 (x4)  in: The *mechanism* is confirmed; the *rates* are <RUN> and remain their
+  SECURITY-NOTES-0.1.4.md
+      run 7968dc50 (x4)  in: * `<RUN>` — `type` (default `read_unlimited`). Largest valid body: **26 B**.
+  SECURITY-NOTES-0.1.4.md
+      run 7a06c1ee (x8)  in: # Security record — 0.1.4 <RUN> loss and request-body limits
+  SECURITY-NOTES-0.1.4.md
+      run 81065ac4 (x4)  in: reach SQLite (harness at `/tmp/<RUN>.py`). Persisted state was read from
+  SECURITY-NOTES-0.1.4.md
+      run abc3d446 (x4)  in: before parsing, refuse beyond that with `413 <RUN>`, and validate only
+  SECURITY-NOTES-0.1.4.md
+      run ac0eac9b (x4)  in: `security/0.1.<RUN>`, based on the released 0.1.3 source
+  SECURITY-NOTES-0.1.4.md
+      run d57df6da (x4)  in: | ticket activation (lease) | after the lease UPDATE | `redeemed_count` 0, `<RUN>` `NULL`, ticket still usable
+  SECURITY-NOTES-0.1.4.md
+      run edd98c0c (x4)  in: 2. **Health reads on its own connection, opened read-only.** `<RUN>()` opens
+  SECURITY-NOTES-0.1.4.md
+      run fae20dec (x4)  in: * `<RUN>` — `ttl_seconds` (1..2,592,000), `max_blocks` (1..4,096), both
+  SECURITY-NOTES-0.1.5.md
+      run 0cc8bcdc (x3)  in: return the ordinary <RUN> shape for a failed operation.
+  SECURITY-NOTES-0.1.5.md
+      run 0d952842 (x3)  in: outputs for <RUN> tokens, so the rule is enforced rather than asserted.
+  SECURITY-NOTES-0.1.5.md
+      run 4397101a (x2)  in: | `tests/<RUN>.py` | 13 new regressions (§7) |
+  SECURITY-NOTES-0.1.5.md
+      run 4397101a (x6)  in: | `tests/<RUN>.py` | 13 regressions (§7), refactored onto the shared fixtures |
+  SECURITY-NOTES-0.1.5.md
+      run 45e2f3d5 (x9)  in: | `tests/<RUN>.py` | 10 regressions covering the recovery contract (§7) |
+  SECURITY-NOTES-0.1.5.md
+      run 538fc292 (x4)  in: `repro/0.1.5/<RUN>.txt` and `…_postpatch.txt`:
+  SECURITY-NOTES-0.1.5.md
+      run 56b129e7 (x4)  in: argparse then reads the value as an option. `repro/0.1.5/<RUN>.py` draws tickets
+  SECURITY-NOTES-0.1.5.md
+      run 6262408b (x3)  in: **[C] Capability sensitivity, carried into the artifact.** A <RUN> error result
+  SECURITY-NOTES-0.1.5.md
+      run 63892a44 (x5)  in: <RUN> contract was changed.
+  SECURITY-NOTES-0.1.5.md
+      run 67da746c (x4)  in: No hash format, <RUN>, signature, package name, schema, licensing or
+  SECURITY-NOTES-0.1.5.md
+      run 67fd11cf (x1)  in: 7. **<RUN> risk.** A retry after an uncertain outcome normally creates a second
+  SECURITY-NOTES-0.1.5.md
+      run 7c7d8aa0 (x4)  in: an optional `<RUN>` would make each checkable when the caller holds the prior
+  SECURITY-NOTES-0.1.5.md
+      run 7cf91f65 (x4)  in: head, mirroring `<RUN>` on the read side. Not implemented here: the directive
+  SECURITY-NOTES-0.1.5.md
+      run 7ec0f7e0 (x1)  in: first. It extends the existing proposal in `<RUN>.1.4.md` §3.1 rather than
+  SECURITY-NOTES-0.1.5.md
+      run 7ec0f7e0 (x3)  in: proposal stage. It extends the original proposal in `<RUN>.1.4.md` §3.1 rather
+  SECURITY-NOTES-0.1.5.md
+      run 8b0f224a (x1)  in: `repro/0.1.5/<RUN>.txt` (identical after the patch):
+  SECURITY-NOTES-0.1.5.md
+      run 8cdf3570 (x4)  in: `<RUN>`, package `lockermcp` 0.1.4. This branch,
+  SECURITY-NOTES-0.1.5.md
+      run 95bbac06 (x4)  in: - **[S] Process-crash durability — measured, and only that.** `repro/0.1.5/<RUN>.py`
+  SECURITY-NOTES-0.1.5.md
+      run a2b57f6b (x4)  in: - a <RUN> chain fails against the computed head
+  SECURITY-NOTES-0.1.5.md
+      run c893f856 (x4)  in: | `lockermcp/server.py` | `_compute_chain()` computes the chain from the exact outgoing bytes; `<RUN>()` is th
+  SECURITY-NOTES-0.1.5.md
+      run cfb39fb3 (x4)  in: | 1 | `locker_deposit` returns the daemon's seal head without computing it from the submitted bytes | **Confir
+  SECURITY-NOTES-0.1.5.md
+      run e0134b41 (x4)  in: `security/0.1.<RUN>`, is based on exactly that commit.
+  SECURITY-NOTES-0.1.5.md
+      run e304d79a (x4)  in: <RUN> defect in a shipped script plus a flaky gate over whether the branch is
+  SECURITY-NOTES-0.1.5.md
+      run ee277057 (x3)  in: From `repro/0.1.5/<RUN>.txt`:
+  SECURITY-NOTES-0.1.5.md
+      run f83e3a36 (x8)  in: and the reference the caller retained then reported `<RUN>` when reading
+  SECURITY-PHASE2.md
+      run 29ab78e6 (x4)  in: (<RUN> default)`. Any unrecognised value — a typo, a bad compose
+  SECURITY-PHASE2.md
+      run 2b549480 (x4)  in: `<RUN>=query` — rather than an automatic fallback, because
+  SECURITY-PHASE2.md
+      run 43fa9551 (x4)  in: this branch until the <RUN> gate, where the full suite runs again.
+  SECURITY-PHASE2.md
+      run 5d286ff0 (x4)  in: payload containing non-ASCII text and a <RUN> instruction and
+  SECURITY-PHASE2.md
+      run 685a994e (x4)  in: `<RUN>`) still go through bare `int()` and will raise a raw
+  SECURITY-PHASE2.md
+      run 7b2a5d43 (x4)  in: `dev` → open; `txid`, `x402` → txid) case-insensitively and <RUN>,
+  SECURITY-PHASE2.md
+      run a07d0e93 (x4)  in: **[U]** Other environment variables (`<RUN>`,
+  SECURITY-PHASE2.md
+      run be9f464c (x4)  in: `dev` → open; `txid`, `x402` → txid) <RUN> and whitespace-tolerantly,
+  SECURITY-PHASE2.md
+      run f189135e (x4)  in: **[S]** Payload bytes are untouched: `<RUN>` verifies and
+  SECURITY-PHASE3.md
+      run 13e11cad (x8)  in: a `payload_utf8` that differs, it raises `<RUN>` with cause
+  SECURITY-PHASE3.md
+      run 14c2dd7b (x4)  in: `_try_utf8` is `payload.decode("utf-8")` with `<RUN>` → `None`.
+  SECURITY-PHASE3.md
+      run 1772a413 (x4)  in: |------|<RUN>------------|
+  SECURITY-PHASE3.md
+      run 1ee36f23 (x16)  in: `scripts/<RUN>.py` depend on.
+  SECURITY-PHASE3.md
+      run 24b3b383 (x4)  in: |------|<RUN>|
+  SECURITY-PHASE3.md
+      run 2e85ba77 (x8)  in: requested, so without a reference a withheld tail is <RUN> from a short
+  SECURITY-PHASE3.md
+      run 38fdcd51 (x4)  in: | Partial reads and empty pads explicit and tested | `test_partial_read_still_compares_against_the_whole_chain
+  SECURITY-PHASE3.md
+      run 3af3b0e4 (x4)  in: <RUN> bound, so it proves nothing on its own.
+  SECURITY-PHASE3.md
+      run 51b11aaa (x20)  in: | `total_blocks` ≠ manifest `block_count` | `<RUN>` |
+  SECURITY-PHASE3.md
+      run 5d2503cd (x4)  in: preserved exactly; understated manifest caught as <RUN>; coherently
+  SECURITY-PHASE3.md
+      run 5f2fa90f (x4)  in: ### 9.4 <RUN> hardening (fail closed on incomplete retrieval)
+  SECURITY-PHASE3.md
+      run 6705f50a (x4)  in: | `<RUN>(pad_id, ticket, from_block=0, to_block=0)` | Walks the **whole** chain, verifies it in Python, then s
+  SECURITY-PHASE3.md
+      run 74d47ad0 (x4)  in: TRUE head:            <RUN>…
+  SECURITY-PHASE3.md
+      run 7cf91f65 (x20)  in: Both read tools take a new optional `<RUN>`. The integrity block gains
+  SECURITY-PHASE3.md
+      run 80462d8d (x4)  in: <RUN> rule safe.
+  SECURITY-PHASE3.md
+      run 8393b151 (x4)  in: REWRITTEN head:       <RUN>…
+  SECURITY-PHASE3.md
+      run 88c9ce65 (x4)  in: | Altered **and** fully rehashed passes internal consistency but fails against the original head | `test_rewri
+  SECURITY-PHASE3.md
+      run 91258152 (x12)  in: | Page returns fewer blocks than requested | `<RUN>` |
+  SECURITY-PHASE3.md
+      run cc9377ce (x8)  in: **[S]** Focused suite `tests/<RUN>.py` — **25 tests**, all passing.
+  SECURITY-PHASE3.md
+      run f83e3a36 (x20)  in: | `<RUN>` | A caller-supplied head was supplied, well-formed, and **equalled** the head recomputed from the ch
+  SECURITY-PHASE3.md
+      run fbfc8a52 (x4)  in: Plus: <RUN>, no manifest-head substitution, existing call signatures and
+  SECURITY-POST-0.1.2.md
+      run 1772a413 (x4)  in: |------|<RUN>------|
+  SECURITY-POST-0.1.2.md
+      run 1ee36f23 (x8)  in: updated instead (`scripts/<RUN>.py`, and the unit test in
+  SECURITY-POST-0.1.2.md
+      run 247fa50d (x4)  in: "recomputed_head": {"value": "<sha|null>", "source": "<RUN>"},
+  SECURITY-POST-0.1.2.md
+      run 3e9ef774 (x4)  in: `block_count` and must stay constant across pages — <RUN>, not
+  SECURITY-POST-0.1.2.md
+      run 43fa9551 (x4)  in: **[C] Assessment: ready to be considered as a separate <RUN> decision, not
+  SECURITY-POST-0.1.2.md
+      run 64b2e3df (x4)  in: the <RUN> test, never as the target the caller's reference is
+  SECURITY-POST-0.1.2.md
+      run 6705f50a (x8)  in: or not. One shared decision point, `_resolve_trust`, is used by `<RUN>`
+  SECURITY-POST-0.1.2.md
+      run 7cf91f65 (x8)  in: | caller's expected head | the `<RUN>` argument | the only value whose trust originates outside this daemon |
+  SECURITY-POST-0.1.2.md
+      run 81d935a0 (x4)  in: ## 2. Finding B — <RUN> `content_type` beside verified bytes
+  SECURITY-POST-0.1.2.md
+      run 94c9a942 (x4)  in: `<RUN>` (the `v0.1.2` tag target).
+  SECURITY-POST-0.1.2.md
+      run 95e8aba1 (x8)  in: **[C]** This is an intentional <RUN> change, and it is the change that
+  SECURITY-POST-0.1.2.md
+      run b17a6442 (x4)  in: <RUN> bytes in the detail. Tested by asserting a distinctive marker
+  SECURITY-POST-0.1.2.md
+      run cc9377ce (x8)  in: `tests/<RUN>.py`).
+  SECURITY-POST-0.1.2.md
+      run cf6af0d5 (x4)  in: with `text/html` serialises **<RUN>**, and neither `content_type` nor
+  SECURITY-POST-0.1.2.md
+      run d3c15337 (x4)  in: |------|<RUN>--|
+  SECURITY-POST-0.1.2.md
+      run d674f5af (x4)  in: **[C]** <RUN> failure now fails closed in **both** read tools, anchored
+  SECURITY-POST-0.1.2.md
+      run e42935db (x4)  in: **[S] Focused:** `tests/<RUN>.py` — **12 tests**, all passing:
+  SECURITY-POST-0.1.2.md
+      run efea6ffd (x4)  in: ## 6. <RUN> readiness
+  SECURITY-POST-0.1.2.md
+      run f83e3a36 (x12)  in: - the chain is internally consistent and the reference matched → `<RUN>`,
+  SECURITY-POST-0.1.2.md
+      run f95813f7 (x8)  in: "<RUN>": false},
+  SECURITY-POST-0.1.2.md
+      run fa84bfdf (x4)  in: |------|<RUN>|
+  demo_handoff.py
+      run c221778c (x8)  in: headers={"Authorization": f"Bearer {write_key}"}).<RUN>()
+  deploy/Caddyfile
+      run 0fa0aa0f (x8)  in: (<RUN>) {
+  deploy/Caddyfile
+      run 299c91d5 (x4)  in: Referrer-Policy "<RUN>"
+  deploy/Caddyfile
+      run 7721ad0d (x4)  in: <RUN> "max-age=31536000; includeSubDomains"
+  deploy/Caddyfile
+      run 9697d0ac (x4)  in: <RUN> "nosniff"
+  deploy/Caddyfile
+      run ba8f2d6b (x4)  in: Strict-Transport-Security "max-age=31536000; <RUN>"
+  deploy/padlockspace/Caddyfile
+      run 0fa0aa0f (x8)  in: (<RUN>) {
+  deploy/padlockspace/Caddyfile
+      run 299c91d5 (x4)  in: Referrer-Policy "<RUN>"
+  deploy/padlockspace/Caddyfile
+      run 7721ad0d (x4)  in: <RUN> "max-age=31536000; includeSubDomains"
+  deploy/padlockspace/Caddyfile
+      run 9697d0ac (x4)  in: <RUN> "nosniff"
+  deploy/padlockspace/Caddyfile
+      run ba8f2d6b (x4)  in: Strict-Transport-Security "max-age=31536000; <RUN>"
+  deploy/padlockspace/www/llms.txt
+      run cacc35aa (x4)  in: "environment"{runtime,<RUN>,dependency_hash}, "artifacts"[]}
+  deploy/padlockspace/www/llms.txt
+      run df35afb3 (x4)  in: Tamper-evident client validation: SHA-256 chain is verified <RUN>
+  lockerd/config.py
+      run 03be6882 (x12)  in: <RUN> = "https://mainnet.base.org"
+  lockerd/config.py
+      run 123c1803 (x4)  in: <RUN> = 4096           # max streamed request body for routes whose
+  lockerd/config.py
+      run 2928d38a (x4)  in: <RUN> and whitespace-tolerant.
+  lockerd/config.py
+      run 3e11b496 (x8)  in: <RUN>: int = READ_LEASE_SECONDS
+  lockerd/config.py
+      run 452dc4ed (x4)  in: <RUN> = 64 * 1024       # max payload returned per blocks slice: 64 KB
+  lockerd/config.py
+      run 4f9c170f (x4)  in: case-insensitive and <RUN>.
+  lockerd/config.py
+      run 5b3b56ac (x4)  in: payment_wallet_address=os.environ.get("<RUN>") or None,
+  lockerd/config.py
+      run 5dea0c7c (x4)  in: <RUN> = 256        # max block count per blocks slice
+  lockerd/config.py
+      run 685a994e (x4)  in: DEFAULT_<RUN> = 2000   # 0.002 USDC (6 decimals)
+  lockerd/config.py
+      run 897e38d3 (x12)  in: <RUN> = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+  lockerd/config.py
+      run 9419118a (x4)  in: <RUN> = 32
+  lockerd/config.py
+      run 9aaab01a (x8)  in: <RUN>: str | None = None
+  lockerd/config.py
+      run 9e8ca06a (x8)  in: <RUN>: int = DEFAULT_REQUIRED_USDC_UNITS
+  lockerd/config.py
+      run a07d0e93 (x4)  in: read_lease_seconds=int(os.environ.get("<RUN>", READ_LEASE_SECONDS)),
+  lockerd/config.py
+      run a674ffd2 (x4)  in: DEFAULT_USDC_CONTRACT = "<RUN>"
+  lockerd/config.py
+      run c4dc25b7 (x4)  in: <RUN> = 256 * 1024       # per-pad byte quota: 256 KB
+  lockerd/config.py
+      run ebe11df5 (x12)  in: <RUN> = 600             # read_once ticket lease window (10 min)
+  lockerd/config.py
+      run ed06716d (x12)  in: <RUN> = 2000   # 0.002 USDC (6 decimals)
+  lockerd/db.py
+      run 0130af9f (x8)  in: :meth:`Store.<RUN>`) rather than composing two. What
+  lockerd/db.py
+      run 0203dc24 (x4)  in: write do serialize for the duration of that one <RUN> read; 60
+  lockerd/db.py
+      run 232250d1 (x4)  in: async def <RUN>(self, pad):
+  lockerd/db.py
+      run 279c3f75 (x4)  in: ``tests/<RUN>.py``).
+  lockerd/db.py
+      run 345b1dd3 (x4)  in: CREATE INDEX IF NOT EXISTS <RUN> ON payment_receipts(pad_id);
+  lockerd/db.py
+      run 3e11b496 (x20)  in: def __init__(self, conn: aiosqlite.Connection, <RUN>: int = cfg.READ_LEASE_SECONDS,
+  lockerd/db.py
+      run 3e254a2e (x8)  in: from contextlib import <RUN>
+  lockerd/db.py
+      run 3fe16540 (x4)  in: <RUN> chain, because the pad keeps no independent record of what
+  lockerd/db.py
+      run a0ad7235 (x16)  in: CREATE TABLE IF NOT EXISTS <RUN> (
+  lockerd/db.py
+      run c4dc25b7 (x8)  in: (pad_id, t, t + ttl_seconds, max_blocks, cfg.<RUN>, write_key_hash),
+  lockerd/db.py
+      run cf206933 (x4)  in: ``writable`` reports **SQLite's <RUN> read-only flag** --
+  lockerd/db.py
+      run d57df6da (x20)  in: <RUN> INTEGER,
+  lockerd/db.py
+      run e77300c4 (x4)  in: CREATE INDEX IF NOT EXISTS <RUN> ON blocks(pad_id, seq);
+  lockerd/db.py
+      run ebe11df5 (x4)  in: def __init__(self, conn: aiosqlite.Connection, read_lease_seconds: int = cfg.<RUN>,
+  lockerd/db.py
+      run edd98c0c (x4)  in: async def <RUN>(path: str) -> aiosqlite.Connection:
+  lockerd/db.py
+      run fc0e1c1c (x4)  in: <RUN>
+  lockerd/hashchain.py
+      run 14c2dd7b (x4)  in: except (ValueError, <RUN>):
+  lockerd/main.py
+      run 0130af9f (x4)  in: ok = await s.<RUN>(
+  lockerd/main.py
+      run 0efabc63 (x4)  in: receipt = await payments.<RUN>(
+  lockerd/main.py
+      run 123c1803 (x24)  in: at most ``cfg.<RUN>`` streamed bytes first (413 beyond that) and
+  lockerd/main.py
+      run 14c2dd7b (x4)  in: except <RUN>:
+  lockerd/main.py
+      run 1692884d (x4)  in: payer_address, amount_units = payments.<RUN>(
+  lockerd/main.py
+      run 2199f03f (x8)  in: <RUN>,
+  lockerd/main.py
+      run 232250d1 (x16)  in: pad = await s.<RUN>(pad)
+  lockerd/main.py
+      run 2d2f5c20 (x4)  in: 409, "<RUN>",
+  lockerd/main.py
+      run 39f08395 (x16)  in: def <RUN>(pad: dict, write_key: str) -> bool:
+  lockerd/main.py
+      run 3e11b496 (x4)  in: app.state.store = db.Store(conn, config.<RUN>, health_conn=health_conn)
+  lockerd/main.py
+      run 3e254a2e (x8)  in: from contextlib import <RUN>
+  lockerd/main.py
+      run 44f48717 (x4)  in: headers={"<RUN>": payments.www_authenticate_header(
+  lockerd/main.py
+      run 452dc4ed (x8)  in: if payload_total > cfg.<RUN>:
+  lockerd/main.py
+      run 46f9e77f (x8)  in: <RUN>,
+  lockerd/main.py
+      run 550186ba (x8)  in: <RUN>,
+  lockerd/main.py
+      run 573066ed (x4)  in: headers={"WWW-Authenticate": payments.<RUN>(
+  lockerd/main.py
+      run 5857e6d6 (x4)  in: "application/json": {"schema": body_model.<RUN>()}}}}
+  lockerd/main.py
+      run 5b3b56ac (x4)  in: logger.warning("LOCKER_MODE=txid but <RUN> is unset")
+  lockerd/main.py
+      run 5dea0c7c (x8)  in: if to - frm + 1 > cfg.<RUN>:
+  lockerd/main.py
+      run 7594a859 (x4)  in: return model.<RUN>(raw)
+  lockerd/main.py
+      run 7968dc50 (x16)  in: <RUN>,
+  lockerd/main.py
+      run 81bfa46c (x4)  in: @app.<RUN>(HTTPException)
+  lockerd/main.py
+      run 87d325ab (x4)  in: except payments.<RUN> as e:
+  lockerd/main.py
+      run 90d1e9ee (x4)  in: if not payments.<RUN>(tx_hash):
+  lockerd/main.py
+      run 9419118a (x4)  in: ttl, cfg.<RUN>)
+  lockerd/main.py
+      run 9aaab01a (x4)  in: wallet = config.<RUN>
+  lockerd/main.py
+      run 9e8ca06a (x12)  in: wallet, config.usdc_contract, config.<RUN>)
+  lockerd/main.py
+      run abc3d446 (x20)  in: raise api_error(413, "<RUN>",
+  lockerd/main.py
+      run bbb03dfe (x4)  in: @app.head("/health", <RUN>=False)
+  lockerd/main.py
+      run ccfa17bd (x16)  in: from fastapi.security import <RUN>, HTTPBearer
+  lockerd/main.py
+      run e9162379 (x12)  in: def <RUN>(model):
+  lockerd/main.py
+      run ebd43528 (x4)  in: async def <RUN>(request: Request, exc: HTTPException):
+  lockerd/main.py
+      run edd98c0c (x4)  in: health_conn = await db.<RUN>(config.db_path)
+  lockerd/main.py
+      run fae20dec (x16)  in: <RUN>,
+  lockerd/models.py
+      run 2199f03f (x4)  in: class <RUN>(BaseModel):
+  lockerd/models.py
+      run 46f9e77f (x4)  in: class <RUN>(BaseModel):
+  lockerd/models.py
+      run 550186ba (x4)  in: class <RUN>(BaseModel):
+  lockerd/models.py
+      run 7968dc50 (x4)  in: class <RUN>(BaseModel):
+  lockerd/models.py
+      run be9b82ad (x4)  in: class <RUN>(BaseModel):
+  lockerd/models.py
+      run fae20dec (x4)  in: class <RUN>(BaseModel):
+  lockerd/payments.py
+      run 015ff881 (x4)  in: f"with the header X-Payment-Proof: <<RUN>>."
+  lockerd/payments.py
+      run 0efabc63 (x4)  in: async def <RUN>(rpc_url: str, tx_hash: str) -> dict:
+  lockerd/payments.py
+      run 1692884d (x4)  in: def <RUN>(receipt, wallet: str, usdc_contract: str, required_units: int):
+  lockerd/payments.py
+      run 3f2b4883 (x8)  in: <RUN> = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+  lockerd/payments.py
+      run 573066ed (x4)  in: def <RUN>(wallet: str, required_units: int) -> str:
+  lockerd/payments.py
+      run 6f33eda6 (x4)  in: "error": "<RUN>",
+  lockerd/payments.py
+      run 87d325ab (x24)  in: class <RUN>(Exception):
+  lockerd/payments.py
+      run 90d1e9ee (x4)  in: def <RUN>(tx_hash: str) -> bool:
+  lockerd/payments.py
+      run 9dd3bebc (x12)  in: def <RUN>(topic: str) -> str:
+  lockerd/payments.py
+      run c221778c (x8)  in: r.<RUN>()
+  lockerd/payments.py
+      run e4e83e05 (x8)  in: """Fetch the receipt for ``tx_hash`` via <RUN>.
+  lockermcp/server.py
+      run 04a6da0c (x32)  in: def <RUN>(
+  lockermcp/server.py
+      run 0cc8bcdc (x3)  in: """A failed deposit. Never the ordinary <RUN> shape.
+  lockermcp/server.py
+      run 0d71e501 (x15)  in: <RUN> = (
+  lockermcp/server.py
+      run 125fe5db (x9)  in: <RUN> = (
+  lockermcp/server.py
+      run 13e11cad (x56)  in: class <RUN>(LockerError):
+  lockermcp/server.py
+      run 14c2dd7b (x4)  in: except <RUN>:
+  lockermcp/server.py
+      run 1be15d4e (x3)  in: <RUN> head is what the blocks acknowledged so far chain to -- it equals
+  lockermcp/server.py
+      run 20d26535 (x8)  in: def <RUN>(manifest_head, observed, expected: dict, chain_valid) -> dict:
+  lockermcp/server.py
+      run 22a765c0 (x12)  in: <RUN> = ("content_type",)
+  lockermcp/server.py
+      run 2342869b (x6)  in: <RUN> = (
+  lockermcp/server.py
+      run 247fa50d (x4)  in: "source": "<RUN>",
+  lockermcp/server.py
+      run 2b549480 (x12)  in: """Resolve ``<RUN>``. Rejects unknown values."""
+  lockermcp/server.py
+      run 2b7fa3df (x6)  in: <RUN> = (
+  lockermcp/server.py
+      run 4621b29b (x3)  in: cause="<RUN>", status="partial",
+  lockermcp/server.py
+      run 4621b29b (x1)  in: pad_id, expected_head, server_head, "<RUN>")
+  lockermcp/server.py
+      run 51b11aaa (x24)  in: "<RUN>")
+  lockermcp/server.py
+      run 575aa2d4 (x8)  in: }, ("<RUN>", fmt)
+  lockermcp/server.py
+      run 5c7ac072 (x21)  in: def <RUN>(e: LockerError, *, status: str, recovery: str,
+  lockermcp/server.py
+      run 63af321e (x8)  in: <RUN> = "internal_consistency_only"  # chain consistent; no reference
+  lockermcp/server.py
+      run 66db69ef (x12)  in: <RUN> = ("header", "query")
+  lockermcp/server.py
+      run 6705f50a (x4)  in: def <RUN>(pad_id: str, ticket: str, from_block: int = 0,
+  lockermcp/server.py
+      run 67da746c (x4)  in: # path already uses; it changes no hash construction and adds no <RUN>.
+  lockermcp/server.py
+      run 6f33eda6 (x4)  in: challenge = {"error": "<RUN>", "detail": r.text}
+  lockermcp/server.py
+      run 7473c912 (x6)  in: <RUN> = (
+  lockermcp/server.py
+      run 74c66e0e (x8)  in: def <RUN>(pad_id: str, ticket: str, start: int, end: int) -> dict:
+  lockermcp/server.py
+      run 7cf91f65 (x64)  in: "an `<RUN>` obtained from the writer over a separately "
+  lockermcp/server.py
+      run 85030af3 (x6)  in: <RUN> = (
+  lockermcp/server.py
+      run 8e34a237 (x8)  in: <RUN> = "trusted_head_match"          # matched a caller-supplied head
+  lockermcp/server.py
+      run 91258152 (x12)  in: "refusing to verify against it", "<RUN>")
+  lockermcp/server.py
+      run 9449f431 (x8)  in: <RUN> = (
+  lockermcp/server.py
+      run 992c0054 (x8)  in: def <RUN>() -> str:
+  lockermcp/server.py
+      run a7874c75 (x8)  in: <RUN> = (
+  lockermcp/server.py
+      run b377b9fd (x21)  in: def <RUN>(*, cause: str, detail: str, status: str, recovery: str,
+  lockermcp/server.py
+      run b752a708 (x12)  in: def <RUN>(value: Any) -> str | None:
+  lockermcp/server.py
+      run c893f856 (x5)  in: def <RUN>(reason: str, pad_id: str, expected_head: str,
+  lockermcp/server.py
+      run dd2c0c06 (x8)  in: <RUN> = (
+  lockermcp/server.py
+      run dde52132 (x8)  in: <RUN> = "not_checked"                  # no chain walked at all
+  lockermcp/server.py
+      run e14d1c6e (x4)  in: ``cause`` is a stable <RUN> discriminator; ``reason`` is the human
+  lockermcp/server.py
+      run f189135e (x12)  in: def <RUN>(pad_id: str, ticket: str):
+  lockermcp/server.py
+      run f58d9908 (x28)  in: def <RUN>(reason: str, integrity: dict, pad_id: str,
+  lockermcp/server.py
+      run f83e3a36 (x8)  in: VERDICT_TRUSTED_HEAD = "<RUN>"          # matched a caller-supplied head
+  lockermcp/server.py
+      run f85a2036 (x12)  in: <RUN> = "header"
+  lockermcp/server.py
+      run f95813f7 (x16)  in: "`manifest_head` is what the daemon asserts, and is marked <RUN> "
+  pyproject.toml
+      run ceebfe5a (x4)  in: [project.<RUN>]
+  repro/0.1.5/_redact.py
+      run 04d6868b (x3)  in: "<RUN>"}
+  repro/0.1.5/out_durability.txt
+      run 08690631 (x12)  in: seal head        : <RUN>…  state=sealed
+  repro/0.1.5/out_durability.txt
+      run 3c12167d (x3)  in: <RUN>.db       exists=True  bytes=4096
+  repro/0.1.5/out_durability.txt
+      run 4d8d81f2 (x9)  in: <RUN>.db       exists=True  bytes=4096
+  repro/0.1.5/out_durability.txt
+      run 76bf07b9 (x4)  in: ack seq=0 curr_hash=<RUN>…
+  repro/0.1.5/out_durability.txt
+      run 85e4f0e3 (x4)  in: ack seq=3 curr_hash=<RUN>…
+  repro/0.1.5/out_durability.txt
+      run bba6a203 (x4)  in: ack seq=2 curr_hash=<RUN>…
+  repro/0.1.5/out_durability.txt
+      run bf2c193f (x4)  in: ack seq=1 curr_hash=<RUN>…
+  repro/0.1.5/out_durability.txt
+      run d62f3e19 (x4)  in: ack seq=4 curr_hash=<RUN>…
+  repro/0.1.5/out_partial_deposit_postpatch.txt
+      run 6705f50a (x3)  in: <RUN>: Read blocks from a pad using the read_ticket. Defaults to Block 0 (the envelope). Read Block 0 first, t
+  repro/0.1.5/out_partial_deposit_postpatch.txt
+      run 7cf91f65 (x3)  in: locker_manifest: Read pad metadata: state, block count, total bytes, sealed_at, head hash. Pass a read_ticket 
+  repro/0.1.5/out_partial_deposit_prepatch.txt
+      run 6705f50a (x4)  in: <RUN>: Read blocks from a pad using the read_ticket. Defaults to Block 0 (the envelope). Read Block 0 first, t
+  repro/0.1.5/out_partial_deposit_prepatch.txt
+      run 7cf91f65 (x4)  in: locker_manifest: Read pad metadata: state, block count, total bytes, sealed_at, head hash. Pass a read_ticket 
+  repro/0.1.5/out_writer_provenance.txt
+      run 42a48090 (x1)  in: rewritten (rehashed) head  : <RUN>…
+  repro/0.1.5/out_writer_provenance.txt
+      run 60b1a45c (x2)  in: === case: <RUN> ===
+  repro/0.1.5/out_writer_provenance.txt
+      run f83e3a36 (x2)  in: reader verdict against the returned reference: <RUN>
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run 0ebcc2d7 (x1)  in: error                     : {'error': {'status': 0, 'kind': 'verification_failed', 'cause': 'append_acknowledg
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run 42a48090 (x4)  in: rewritten (rehashed) head  : <RUN>…
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run 60b1a45c (x8)  in: === case: <RUN> ===
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run ec8b83f7 (x1)  in: error                     : {'error': {'status': 0, 'kind': 'verification_failed', 'cause': 'append_acknowledg
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run ef788029 (x1)  in: error                     : {'error': {'status': 0, 'kind': 'verification_failed', 'cause': 'seal_head_mismatc
+  repro/0.1.5/out_writer_provenance_postpatch.txt
+      run f83e3a36 (x8)  in: reader verdict against the returned reference: <RUN>
+  repro/0.1.5/out_writer_provenance_prepatch.txt
+      run 42a48090 (x4)  in: rewritten (rehashed) head  : <RUN>…
+  repro/0.1.5/out_writer_provenance_prepatch.txt
+      run 60b1a45c (x8)  in: === case: <RUN> ===
+  repro/0.1.5/out_writer_provenance_prepatch.txt
+      run f83e3a36 (x24)  in: reader verdict against the returned reference: <RUN>
+  repro/0.1.5/repro_durability.py
+      run 7a06c1ee (x4)  in: """Phase 1C evidence: <RUN> durability across a PROCESS KILL.
+  repro/0.1.5/repro_durability.py
+      run 95bbac06 (x4)  in: Run:  .venv/bin/python repro/0.1.5/<RUN>.py
+  repro/0.1.5/repro_inspect_pad.py
+      run 6f00b0cc (x4)  in: .venv/bin/python repro/0.1.5/<RUN>.py
+  repro/0.1.5/repro_inspect_pad.py
+      run aba6a6e5 (x4)  in: `tests/<RUN>.py::_seed_pad` does, then invokes the shipped
+  repro/0.1.5/repro_partial_deposit.py
+      run 1491302b (x4)  in: .venv/bin/python repro/0.1.5/<RUN>.py
+  repro/0.1.5/repro_partial_deposit.py
+      run 44d31148 (x4)  in: class Handler(http.server.<RUN>):
+  repro/0.1.5/repro_partial_deposit.py
+      run 8c2afbaf (x4)  in: httpd = http.server.<RUN>(("127.0.0.1", free_port()), Handler)
+  repro/0.1.5/repro_partial_deposit.py
+      run aff9d279 (x4)  in: <RUN> = "HTTP/1.1"
+  repro/0.1.5/repro_partial_deposit.py
+      run c0fcaf84 (x4)  in: self.<RUN> = True
+  repro/0.1.5/repro_ticket_dash.py
+      run 56b129e7 (x4)  in: .venv/bin/python repro/0.1.5/<RUN>.py
+  repro/0.1.5/repro_writer_provenance.py
+      run 264e4dd2 (x8)  in: def <RUN>(db_path: str, pad_id: str, table_payload: bytes) -> str:
+  repro/0.1.5/repro_writer_provenance.py
+      run 44d31148 (x4)  in: class Handler(http.server.<RUN>):
+  repro/0.1.5/repro_writer_provenance.py
+      run 60b1a45c (x12)  in: 3. <RUN>  the seal response reports a head the chain does not have
+  repro/0.1.5/repro_writer_provenance.py
+      run 6705f50a (x4)  in: read = mcp.<RUN>(pad_id=pad_id, ticket=result["read_ticket"],
+  repro/0.1.5/repro_writer_provenance.py
+      run 7cf91f65 (x4)  in: <RUN>=result["head_hash"])
+  repro/0.1.5/repro_writer_provenance.py
+      run 8c2afbaf (x8)  in: def start_shim(upstream: str, state: ShimState) -> tuple[http.server.<RUN>, str]:
+  repro/0.1.5/repro_writer_provenance.py
+      run 9855715f (x8)  in: out["<RUN>"] = [r[1] for r in stored] == expected
+  repro/0.1.5/repro_writer_provenance.py
+      run 9e4b82b9 (x12)  in: out["<RUN>"] = result.get("head_hash") == expected[-1]
+  repro/0.1.5/repro_writer_provenance.py
+      run a00acc94 (x8)  in: def <RUN>(self, method: str, path: str, req: bytes, obj: dict) -> dict | None:
+  repro/0.1.5/repro_writer_provenance.py
+      run aff9d279 (x4)  in: <RUN> = "HTTP/1.1"
+  repro/0.1.5/repro_writer_provenance.py
+      run cfb39fb3 (x4)  in: .venv/bin/python repro/0.1.5/<RUN>.py
+  repro/0.1.5/repro_writer_provenance.py
+      run d8e0686f (x12)  in: out["<RUN>"] = [
+  repro/0.1.5/repro_writer_provenance.py
+      run e3225a08 (x8)  in: out["<RUN>"] = "blocks" in read
+  repro/0.1.5/repro_writer_provenance.py
+      run fa6f23d8 (x8)  in: out["<RUN>"] = result.get("head_source") or result.get("head_provenance")
+  scripts/check_integrity.py
+      run 3fe16540 (x4)  in: like a <RUN> chain. To catch that, compare against the caller's own
+  scripts/check_integrity.py
+      run 6ce4b0ee (x4)  in: except sqlite3.<RUN> as exc:
+  scripts/check_integrity.py
+      run e14d1c6e (x4)  in: ap.add_argument("--json", action="store_true", help="emit a <RUN> report")
+  scripts/dogfood_llm.py
+      run 1b72634f (x8)  in: <RUN> = (
+  scripts/dogfood_llm.py
+      run 2928d38a (x8)  in: "a text file and prints the 10 most frequent words (<RUN>), skipping "
+  scripts/dogfood_llm.py
+      run 60761823 (x8)  in: if getattr(result, "<RUN>", None):
+  scripts/dogfood_llm.py
+      run 6705f50a (x12)  in: "may ONLY call locker_manifest and <RUN> — NEVER locker_create, "
+  scripts/dogfood_llm.py
+      run 8e131207 (x12)  in: from mcp import ClientSession, <RUN>
+  scripts/dogfood_llm.py
+      run 918ca96a (x4)  in: # <RUN> check: any 400 on append?
+  scripts/dogfood_llm.py
+      run 97f1e04c (x8)  in: <RUN> = (
+  scripts/dogfood_llm.py
+      run c221778c (x4)  in: r.<RUN>()
+  scripts/dogfood_llm.py
+      run d3813d9c (x12)  in: def <RUN>(r):
+  scripts/dogfood_llm.py
+      run e643273d (x12)  in: <RUN> = [t for t in log
+  scripts/inspect_pad.py
+      run 05dbc20c (x4)  in: ``<RUN>`` returns exit 2 while the same ticket in
+  scripts/release_build.py
+      run 3be3e387 (x4)  in: "<RUN>": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+  scripts/release_build.py
+      run 456ad581 (x4)  in: manifest_path = out_dir / f"<RUN>{short}.json"
+  scripts/release_build.py
+      run 45bfa271 (x8)  in: <RUN> = (".db", ".db-wal", ".db-shm", ".sqlite", ".sqlite3", ".pyc", ".egg-info", ".whl", ".tar.gz")
+  scripts/release_build.py
+      run 6a45fb5f (x8)  in: <RUN> = (".pem", ".key", ".p12", ".pfx")
+  scripts/release_build.py
+      run a9f186d7 (x4)  in: out_dir = Path(args.out).resolve() if args.out else (repo.parent / f"<RUN>{short}")
+  scripts/release_build.py
+      run ccb246be (x4)  in: "<RUN>": branch,
+  scripts/release_build.py
+      run d064d859 (x4)  in: # ---- assert the export is clean <RUN>
+  scripts/release_build.py
+      run d3c15337 (x4)  in: # ---- 1. resolve the commit to a full object ID <RUN>------
+  scripts/release_build.py
+      run f2de57fa (x4)  in: # ---- 1. resolve the commit to a full object ID <RUN>
+  scripts/test_handoff_e2e.py
+      run 1a4aec5e (x4)  in: s = socket.<RUN>(("127.0.0.1", port), timeout=0.3)
+  scripts/test_handoff_e2e.py
+      run 1ee36f23 (x4)  in: Run with the project venv:  .venv/bin/python scripts/<RUN>.py
+  scripts/test_handoff_e2e.py
+      run 60761823 (x8)  in: if getattr(result, "<RUN>", None):
+  scripts/test_handoff_e2e.py
+      run 6705f50a (x16)  in: env = await call_tool(session, "<RUN>",
+  scripts/test_handoff_e2e.py
+      run 8e131207 (x12)  in: from mcp import ClientSession, <RUN>
+  scripts/test_handoff_e2e.py
+      run a07d0e93 (x4)  in: "<RUN>": str(LEASE_SECONDS)}
+  tests/conftest.py
+      run 44d31148 (x3)  in: class Handler(http.server.<RUN>):
+  tests/conftest.py
+      run 60b1a45c (x6)  in: * ``<RUN>`` — the seal response reports a head the chain does not have.
+  tests/conftest.py
+      run 8c2afbaf (x3)  in: httpd = http.server.<RUN>(("127.0.0.1", free_port()), Handler)
+  tests/conftest.py
+      run 97992679 (x6)  in: def <RUN>(self, path: str, obj: dict) -> dict | None:
+  tests/conftest.py
+      run aa886a3a (x6)  in: <RUN> = {"note": "üñïçødé — 你好 🎯", "looks_like_json": '{"schema": "x"}'}
+  tests/conftest.py
+      run ab04ad35 (x6)  in: def <RUN>(self, path: str, body: bytes) -> bytes | None:
+  tests/conftest.py
+      run aff9d279 (x3)  in: <RUN> = "HTTP/1.1"
+  tests/conftest.py
+      run c0fcaf84 (x3)  in: self.<RUN> = True
+  tests/test_ack_write_and_body_limits.py
+      run 0203dc24 (x4)  in: """The structural invariant: every <RUN> statement holds the lock."""
+  tests/test_ack_write_and_body_limits.py
+      run 123c1803 (x8)  in: ``cfg.<RUN>`` streamed bytes first and answer 413 beyond that, measured
+  tests/test_ack_write_and_body_limits.py
+      run 20135ecd (x4)  in: """The framework's validation behaviour for <RUN> bodies is unchanged."""
+  tests/test_ack_write_and_body_limits.py
+      run 2d2f5c20 (x4)  in: assert r.json()["error"] == "<RUN>"
+  tests/test_ack_write_and_body_limits.py
+      run 470e6aa4 (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run 475bb067 (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run 7a06c1ee (x4)  in: """Post-0.1.3 findings: <RUN> loss under concurrent /health, and JSON body caps.
+  tests/test_ack_write_and_body_limits.py
+      run 847d7c8e (x12)  in: def <RUN>() -> bytes:
+  tests/test_ack_write_and_body_limits.py
+      run 8da374ed (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run 99882605 (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run a0ad7235 (x8)  in: len(raw(path, "SELECT tx_hash FROM <RUN>")))
+  tests/test_ack_write_and_body_limits.py
+      run a1856936 (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run abc3d446 (x4)  in: assert r.json()["error"] == "<RUN>"
+  tests/test_ack_write_and_body_limits.py
+      run bec3c6d5 (x8)  in: async def <RUN>(self, pad_id, seq, prev_hash, curr_hash, ct, payload):
+  tests/test_ack_write_and_body_limits.py
+      run ecf2c5f6 (x4)  in: async def <RUN>(rig):
+  tests/test_ack_write_and_body_limits.py
+      run ee732f59 (x12)  in: def <RUN>() -> bytes:
+  tests/test_ack_write_and_body_limits.py
+      run f7cf898c (x4)  in: async def <RUN>(tmp_path):
+  tests/test_ack_write_and_body_limits.py
+      run fe059673 (x8)  in: async with app.router.<RUN>(app):
+  tests/test_deposit_integrity.py
+      run 44d31148 (x1)  in: class Handler(http.server.<RUN>):
+  tests/test_deposit_integrity.py
+      run 45e2f3d5 (x3)  in: # Shared with <RUN>.py: the daemon fixture is `deposit_daemon` and the shim
+  tests/test_deposit_integrity.py
+      run 538fc292 (x4)  in: ``repro/0.1.5/<RUN>.txt``): a shim that stored different bytes
+  tests/test_deposit_integrity.py
+      run 60b1a45c (x4)  in: if state.mode == "<RUN>" and path.endswith("/seal"):
+  tests/test_deposit_integrity.py
+      run 60b1a45c (x9)  in: with injecting("<RUN>"):
+  tests/test_deposit_integrity.py
+      run 6705f50a (x12)  in: read = mcp.<RUN>(pad_id=result["pad_id"], ticket=result["read_ticket"],
+  tests/test_deposit_integrity.py
+      run 7cf91f65 (x12)  in: from_block=0, to_block=9, <RUN>=result["head_hash"])
+  tests/test_deposit_integrity.py
+      run 8c2afbaf (x1)  in: httpd = http.server.<RUN>(("127.0.0.1", _free_port()), Handler)
+  tests/test_deposit_integrity.py
+      run 97992679 (x2)  in: def <RUN>(self, path: str, obj: dict) -> dict | None:
+  tests/test_deposit_integrity.py
+      run aa886a3a (x8)  in: <RUN> = {"note": "üñïçødé — 你好 🎯", "looks_like_json": '{"schema": "x"}'}
+  tests/test_deposit_integrity.py
+      run ab04ad35 (x2)  in: def <RUN>(self, path: str, body: bytes) -> bytes | None:
+  tests/test_deposit_integrity.py
+      run aff9d279 (x1)  in: <RUN> = "HTTP/1.1"
+  tests/test_deposit_integrity.py
+      run f83e3a36 (x4)  in: assert read["integrity"]["verdict"] == "<RUN>"
+  tests/test_deposit_recovery.py
+      run 0cc8bcdc (x3)  in: 2. The existing ``error`` indicator is preserved and the ordinary <RUN> shape
+  tests/test_deposit_recovery.py
+      run 0d952842 (x3)  in: assert not offenders, f"<RUN> tokens in committed evidence: {offenders}"
+  tests/test_deposit_recovery.py
+      run 34b16fce (x9)  in: class <RUN>(logging.Handler):
+  tests/test_deposit_recovery.py
+      run 60b1a45c (x15)  in: with injecting("<RUN>"):
+  tests/test_deposit_recovery.py
+      run 6705f50a (x3)  in: read = mcp.<RUN>(pad_id=caps["pad_id"], ticket=ticket, from_block=0, to_block=9)
+  tests/test_deposit_recovery.py
+      run 71467f80 (x6)  in: <RUN> = ticket2 in sink.text
+  tests/test_deposit_recovery.py
+      run 9166d1bf (x15)  in: <RUN> = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+  tests/test_hardening.py
+      run 0259ebae (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run 65aa933a (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run 7451ce64 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run 82525bc2 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run adfc0be9 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run b4c50691 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run dcc43d86 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run e87a9d30 (x4)  in: async def <RUN>(client):
+  tests/test_hardening.py
+      run fe059673 (x4)  in: async with app.router.<RUN>(app):
+  tests/test_lockerd.py
+      run 006bd6d0 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 07b39af6 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 0a195978 (x4)  in: async def <RUN>(client, monkeypatch):
+  tests/test_lockerd.py
+      run 3a177d85 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 3d5f6cc7 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 417a48f8 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 5cbcd56e (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 6c9bec1b (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 7160f805 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 89248392 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 8964a4b0 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 91e339bd (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run 9d9d5259 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run a004dd6b (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run a2f95d2d (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run aa614f31 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run aafbcbf8 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run acaf86aa (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run bb6dd576 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run c4dc25b7 (x4)  in: assert m["total_bytes"] <= cfg.<RUN>
+  tests/test_lockerd.py
+      run cb78706d (x4)  in: async def <RUN>(client, monkeypatch):
+  tests/test_lockerd.py
+      run d607cb93 (x4)  in: b"<RUN>")).status_code == 201
+  tests/test_lockerd.py
+      run d6fff8b9 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run d8e48886 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run dde235e1 (x4)  in: async def <RUN>(client, tmp_path):
+  tests/test_lockerd.py
+      run f7980e5b (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run f82b6c23 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run fa340391 (x4)  in: async def <RUN>(client):
+  tests/test_lockerd.py
+      run fe059673 (x4)  in: async with app.router.<RUN>(app):
+  tests/test_payments.py
+      run 0031424f (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run 0191a955 (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run 0efabc63 (x4)  in: monkeypatch.setattr(payments, "<RUN>", fake_fetch)
+  tests/test_payments.py
+      run 112e24f2 (x4)  in: www = r.headers["<RUN>"]
+  tests/test_payments.py
+      run 3f2b4883 (x4)  in: TRANSFER_TOPIC = payments.<RUN>
+  tests/test_payments.py
+      run 44f48717 (x4)  in: # 2. Challenge: x402 without proof -> 402 + challenge + <RUN>
+  tests/test_payments.py
+      run 47470899 (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run 6f33eda6 (x4)  in: assert body["error"] == "<RUN>"
+  tests/test_payments.py
+      run 6f9a46db (x24)  in: def <RUN>(recipient, amount_units, contract=USDC_CONTRACT, payer=PAYER):
+  tests/test_payments.py
+      run 897e38d3 (x4)  in: USDC_CONTRACT = cfg.<RUN>
+  tests/test_payments.py
+      run 92c0292d (x4)  in: async def <RUN>(tmp_path):
+  tests/test_payments.py
+      run 9aaab01a (x4)  in: <RUN>=WALLET,
+  tests/test_payments.py
+      run a0ad7235 (x4)  in: "SELECT tx_hash, amount_units, payer_address FROM <RUN> WHERE tx_hash=?",
+  tests/test_payments.py
+      run acb998cf (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run b5998f8a (x4)  in: async def <RUN>(tmp_path):
+  tests/test_payments.py
+      run e1b2f8ff (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run e64d27d3 (x4)  in: async def <RUN>(x402_client, tmp_path):
+  tests/test_payments.py
+      run fda398d6 (x4)  in: async def <RUN>(x402_client):
+  tests/test_payments.py
+      run fe059673 (x12)  in: async with app.router.<RUN>(app):
+  tests/test_phase2_security_fixes.py
+      run 03646252 (x4)  in: def <RUN>(raw, expected):
+  tests/test_phase2_security_fixes.py
+      run 2b549480 (x28)  in: monkeypatch.delenv("<RUN>", raising=False)
+  tests/test_phase2_security_fixes.py
+      run 2e766657 (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run 3e0c636e (x4)  in: def <RUN>(live_daemon, monkeypatch, transport):
+  tests/test_phase2_security_fixes.py
+      run 476e2f90 (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run 534fff84 (x4)  in: def <RUN>():
+  tests/test_phase2_security_fixes.py
+      run 6705f50a (x4)  in: result = mcp.<RUN>(pad_id, ticket, from_block=0, to_block=7)
+  tests/test_phase2_security_fixes.py
+      run 6e39da18 (x4)  in: def <RUN>(monkeypatch, raw, expected):
+  tests/test_phase2_security_fixes.py
+      run 74b6bced (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run 74c66e0e (x12)  in: mcp.<RUN>("pad-1", "TICKET-VALUE", 0, 3)
+  tests/test_phase2_security_fixes.py
+      run 806a9cc0 (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run 992c0054 (x12)  in: def test_default_<RUN>_is_header(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run a1770ebf (x4)  in: def <RUN>(raw):
+  tests/test_phase2_security_fixes.py
+      run bff6b996 (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase2_security_fixes.py
+      run d1d8f77d (x4)  in: def <RUN>():
+  tests/test_phase2_security_fixes.py
+      run da865d99 (x4)  in: def <RUN>(live_daemon):
+  tests/test_phase2_security_fixes.py
+      run dd2c0c06 (x8)  in: assert block["note"] == mcp.<RUN>
+  tests/test_phase2_security_fixes.py
+      run de59798d (x4)  in: def <RUN>(monkeypatch):
+  tests/test_phase3_trusted_head.py
+      run 14c2dd7b (x4)  in: except <RUN>:
+  tests/test_phase3_trusted_head.py
+      run 3620badc (x8)  in: def <RUN>(self) -> list[dict]:
+  tests/test_phase3_trusted_head.py
+      run 38fdcd51 (x4)  in: def <RUN>(live_daemon):
+  tests/test_phase3_trusted_head.py
+      run 44d31148 (x8)  in: class _Handler(http.server.<RUN>):
+  tests/test_phase3_trusted_head.py
+      run 51b11aaa (x32)  in: assert r["error"]["cause"] == "<RUN>"
+  tests/test_phase3_trusted_head.py
+      run 63af321e (x20)  in: assert integ["verdict"] == mcp.<RUN>
+  tests/test_phase3_trusted_head.py
+      run 6705f50a (x160)  in: r = mcp.<RUN>(pad_id, ticket, from_block=0, to_block=9,
+  tests/test_phase3_trusted_head.py
+      run 696e0a71 (x40)  in: if host.<RUN> is not None:
+  tests/test_phase3_trusted_head.py
+      run 6ebfa98f (x4)  in: def <RUN>(live_daemon, hostile):
+  tests/test_phase3_trusted_head.py
+      run 78980578 (x4)  in: def <RUN>(live_daemon, hostile):
+  tests/test_phase3_trusted_head.py
+      run 7cf91f65 (x140)  in: the reader as ``<RUN>``.
+  tests/test_phase3_trusted_head.py
+      run 8c2afbaf (x8)  in: self._httpd = http.server.<RUN>(("127.0.0.1", 0), _Handler)
+  tests/test_phase3_trusted_head.py
+      run 8e34a237 (x24)  in: assert integ["verdict"] == mcp.<RUN>
+  tests/test_phase3_trusted_head.py
+      run 90393440 (x4)  in: def <RUN>(live_daemon, hostile):
+  tests/test_phase3_trusted_head.py
+      run 91258152 (x16)  in: assert r["error"]["cause"] == "<RUN>"
+  tests/test_phase3_trusted_head.py
+      run a9694111 (x4)  in: def <RUN>(live_daemon):
+  tests/test_phase3_trusted_head.py
+      run aff9d279 (x8)  in: <RUN> = "HTTP/1.1"
+  tests/test_phase3_trusted_head.py
+      run be8e6eda (x24)  in: m = dict(host.<RUN>())
+  tests/test_phase3_trusted_head.py
+      run c4270d96 (x12)  in: blocks = host.<RUN>()
+  tests/test_phase3_trusted_head.py
+      run d8c2a860 (x4)  in: """Write a real pad. Returns (pad_id, read_ticket, <RUN>|None)."""
+  tests/test_phase3_trusted_head.py
+      run dde52132 (x4)  in: assert m["integrity"]["verdict"] == mcp.<RUN>
+  tests/test_phase3_trusted_head.py
+      run e42935db (x4)  in: ``tests/<RUN>.py`` and ``SECURITY-POST-0.1.2.md``.
+  tests/test_phase3_trusted_head.py
+      run f5833a3c (x4)  in: def <RUN>(live_daemon, hostile):
+  tests/test_post_012_findings.py
+      run 08bf44a1 (x12)  in: def <RUN>(con, pad_id: str, ct: str) -> None:
+  tests/test_post_012_findings.py
+      run 247fa50d (x8)  in: assert hp["recomputed_head"]["source"] == "<RUN>"
+  tests/test_post_012_findings.py
+      run 6705f50a (x68)  in: r = mcp.<RUN>(pad_id, ticket, from_block=0, to_block=9)
+  tests/test_post_012_findings.py
+      run 74c66e0e (x12)  in: original = mcp.<RUN>
+  tests/test_post_012_findings.py
+      run 7cf91f65 (x56)  in: r = mcp.locker_read_blocks(pad_id, ticket, <RUN>=head, from_block=0, to_block=9)
+  tests/test_post_012_findings.py
+      run 81d935a0 (x4)  in: "a <RUN> content_type changed the reader's output"
+  tests/test_post_012_findings.py
+      run d674f5af (x4)  in: integrity block consumed tampered payloads. <RUN> failures now fail
+  tests/test_post_012_findings.py
+      run ea7b17bb (x4)  in: MARKER = "<RUN>"
+  tests/test_post_012_findings.py
+      run f83e3a36 (x16)  in: assert r["integrity"]["verdict"] == "<RUN>"
+  tests/test_post_012_findings.py
+      run f95813f7 (x8)  in: assert hp["manifest_head"]["<RUN>"] is False, \
+  tests/test_transaction_boundary.py
+      run 0e370142 (x4)  in: async def <RUN>(rig):
+  tests/test_transaction_boundary.py
+      run 0efabc63 (x4)  in: monkeypatch.setattr(payments, "<RUN>", fake_fetch)
+  tests/test_transaction_boundary.py
+      run 6aff4645 (x24)  in: async def <RUN>(self, pad_id, seq, prev_hash, curr_hash, ct, payload):
+  tests/test_transaction_boundary.py
+      run 6ce4b0ee (x4)  in: with pytest.raises(sqlite3.<RUN>):
+  tests/test_transaction_boundary.py
+      run 6f9a46db (x8)  in: receipts[tx(7)] = tp.make_receipt(logs=[tp.<RUN>(wallet, 2000)])
+  tests/test_transaction_boundary.py
+      run 9aaab01a (x4)  in: <RUN>=wallet))
+  tests/test_transaction_boundary.py
+      run a0ad7235 (x12)  in: assert raw(path, "SELECT tx_hash FROM <RUN> WHERE tx_hash=?", (tx(7),)) == [], \
+  tests/test_transaction_boundary.py
+      run afa37cac (x4)  in: async def <RUN>(tmp_path):
+  tests/test_transaction_boundary.py
+      run cce0407a (x4)  in: # a <RUN> fact is deliberately NOT what this reports: the database file
+  tests/test_transaction_boundary.py
+      run cf206933 (x4)  in: """It reports SQLite's <RUN> read-only flag, nothing more."""
+  tests/test_transaction_boundary.py
+      run d57df6da (x12)  in: " <RUN> = COALESCE(<RUN>, ?) WHERE ticket_id = ?", (1, ticket_id))
+  tests/test_transaction_boundary.py
+      run fe059673 (x12)  in: async with app.router.<RUN>(app):
+
+=== the two whole values, and where they live ===
+  read ticket: 1 occurrence(s)
+      e413848165  repro/0.1.5/out_ticket_dash.txt  x1
+  pad id: 1 occurrence(s)
+      e413848165  repro/0.1.5/out_partial_deposit_prepatch.txt  x1

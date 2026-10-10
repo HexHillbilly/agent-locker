@@ -1,0 +1,64 @@
+branch security/0.1.5-writer-verification; 4 commit(s) after the public baseline d59efacc
+
+=== commits carrying values ===
+  e413848165  writer-side deposit integrity: verify acknowledgments agains
+      4 credential-shaped, 1 pad-id-shaped, in 5 file(s)
+        repro/0.1.5/out_partial_deposit_prepatch.txt: 0 credential(s) [] 1 pad id(s) [bf613d02]
+        repro/0.1.5/out_ticket_dash.txt: 1 credential(s) [271596a3] 0 pad id(s) []
+        tests/test_hardening.py: 1 credential(s) [35930647] 0 pad id(s) []
+        tests/test_lockerd.py: 1 credential(s) [26f79d12] 0 pad id(s) []
+        tests/test_post_012_findings.py: 1 credential(s) [af07dc9a] 0 pad id(s) []
+  34870fc727  0.1.5: return received capabilities on deposit failure, in a
+      4 credential-shaped, 0 pad-id-shaped, in 4 file(s)
+        tests/test_deposit_recovery.py: 1 credential(s) [e49c4bcc] 0 pad id(s) []
+        tests/test_hardening.py: 1 credential(s) [35930647] 0 pad id(s) []
+        tests/test_lockerd.py: 1 credential(s) [26f79d12] 0 pad id(s) []
+        tests/test_post_012_findings.py: 1 credential(s) [af07dc9a] 0 pad id(s) []
+  130da4163f  remove a stray duplicate capture from repro/0.1.5
+      4 credential-shaped, 0 pad-id-shaped, in 4 file(s)
+        tests/test_deposit_recovery.py: 1 credential(s) [e49c4bcc] 0 pad id(s) []
+        tests/test_hardening.py: 1 credential(s) [35930647] 0 pad id(s) []
+        tests/test_lockerd.py: 1 credential(s) [26f79d12] 0 pad id(s) []
+        tests/test_post_012_findings.py: 1 credential(s) [af07dc9a] 0 pad id(s) []
+  3bc0c22829  record the 0.1.5 release candidate: source, artifacts, evide
+      4 credential-shaped, 0 pad-id-shaped, in 4 file(s)
+        tests/test_deposit_recovery.py: 1 credential(s) [e49c4bcc] 0 pad id(s) []
+        tests/test_hardening.py: 1 credential(s) [35930647] 0 pad id(s) []
+        tests/test_lockerd.py: 1 credential(s) [26f79d12] 0 pad id(s) []
+        tests/test_post_012_findings.py: 1 credential(s) [af07dc9a] 0 pad id(s) []
+
+=== distinct values ever committed: 5 credential-shaped, 1 pad-id-shaped ===
+  credential 26f79d12  length 43
+  credential 271596a3  length 43
+  credential 35930647  length 43
+  credential af07dc9a  length 43
+  credential e49c4bcc  length 43
+  pad id     bf613d02  length 32
+
+=== are those values in any built artifact? (exact match, not a shape scan) ===
+  lockermcp-0.1.5-py3-none-any.whl: 17 member(s), 0 exact hit(s)
+  lockermcp-0.1.5.tar.gz: 45 member(s), 4 exact hit(s)
+      credential e49c4bcc in lockermcp-0.1.5/tests/test_deposit_recovery.py
+      credential 35930647 in lockermcp-0.1.5/tests/test_hardening.py
+      credential 26f79d12 in lockermcp-0.1.5/tests/test_lockerd.py
+      credential af07dc9a in lockermcp-0.1.5/tests/test_post_012_findings.py
+  lockermcp-0.1.4-py3-none-any.whl: 17 member(s), 0 exact hit(s)
+  lockermcp-0.1.4.tar.gz: 43 member(s), 3 exact hit(s)
+      credential 35930647 in lockermcp-0.1.4/tests/test_hardening.py
+      credential 26f79d12 in lockermcp-0.1.4/tests/test_lockerd.py
+      credential af07dc9a in lockermcp-0.1.4/tests/test_post_012_findings.py
+
+=== which released commits contain those blobs? ===
+Traceback (most recent call last):
+  File "/home/lucky/agent-locker/repro/0.1.5/scan_history_for_capabilities.py", line 140, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/lucky/agent-locker/repro/0.1.5/scan_history_for_capabilities.py", line 131, in main
+    if git("merge-base", "--is-ancestor", commit, tag).strip() == "" and \
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lucky/agent-locker/repro/0.1.5/scan_history_for_capabilities.py", line 32, in git
+    return subprocess.run(["git", *args], cwd=REPO, capture_output=True, text=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lucky/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', 'merge-base', '--is-ancestor', 'e4138481656da592c3be9e07d10494d3bf13fb07', 'v0.1.0']' returned non-zero exit status 1.

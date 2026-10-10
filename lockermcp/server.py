@@ -28,7 +28,7 @@ VERDICT_NOT_CHECKED = "not_checked"                  # no chain walked at all
 VERDICT_FAILED = "failed"
 
 # How this client presents a read ticket. "header" (default) sends
-# `Authorization: Bearer <ticket>`; "query" sends the legacy `?ticket=<ticket>`.
+# `Authorization: Bearer *** "query" sends the legacy `?ticket=<ticket>`.
 # The daemon has accepted the header since its first revision, so "header" is
 # compatible with every daemon version in the repository history — but an older
 # daemon *and* a proxy that strips Authorization would need "query". Kept as an
@@ -62,7 +62,7 @@ def ticket_transport() -> str:
 
 server = MCPServer(
     "lockermcp",
-    version="0.1.4",
+    version="0.1.5",
     instructions=(
         "Append-only, tamper-evident agent-to-agent handoff. Block 0 must be a "
         "locker.handoff.v1 envelope. Every read reports an `integrity` block — "
@@ -557,6 +557,169 @@ def _fetch_and_verify_chain(pad_id: str, ticket: str):
     return chain_valid, verified, blocks, manifest, observed
 
 
+# ----------------------------------------------------------------- writer integrity ---
+# [C] Writing a handoff is a sequence of requests, and every hash the daemon reports back
+# is the daemon's claim about what it stored. To commit to the bytes IT submitted, the
+# writer recomputes the chain locally from those exact outgoing bytes and checks every
+# acknowledgment against that. This is the writer half of the trusted-head idea the read
+# path already uses; it changes no hash construction and adds no canonicalization.
+
+def _compute_chain(payloads: list[bytes]) -> list[str]:
+    """The chain a writer computes for itself, from the exact bytes it will submit.
+
+    Must stay equal to the daemon's ``lockerd.hashchain.compute_hash``:
+    ``sha256(prev_hash_ascii + payload_bytes)`` chaining from 64 zeros. A regression test
+    pins the two implementations equal, so a format change cannot silently diverge here.
+    """
+    prev = ZERO_HASH
+    chain: list[str] = []
+    for payload in payloads:
+        prev = hashlib.sha256(prev.encode("utf-8") + payload).hexdigest()
+        chain.append(prev)
+    return chain
+
+
+DEPOSIT_ACK_NOTE = (
+    "An acknowledgment means the daemon answered for that step. It is not proof that the "
+    "bytes are durably stored, still available, or readable."
+)
+DEPOSIT_CONTINUATION_NOTE = (
+    "Nothing is retried, replayed, compensated or deleted, and no automatic continuation is "
+    "performed. Inspect the pad yourself before acting on it."
+)
+DEPOSIT_UNCERTAIN_NOTE = (
+    "The step(s) listed under 'uncertain' may already have committed: their outcome was not "
+    "determined. Do not retry them blindly."
+)
+DEPOSIT_NO_CAPABILITIES_NOTE = (
+    "No capabilities were received for this attempt, so recovery is not available through "
+    "this API: the pad, if it exists, cannot be read, written, sealed or removed by anyone."
+)
+DEPOSIT_CAPABILITY_SENSITIVITY = (
+    "This result carries pad capabilities. Treat it exactly like a successful creation "
+    "result: it is a secret, and it must not be logged, pasted into a report or committed to "
+    "evidence."
+)
+DEPOSIT_VERIFICATION_PROHIBITION = (
+    "Do not continue, retry, replay or compensate automatically after a verification "
+    "failure: the acknowledged steps are not confirmed to hold the bytes submitted. Inspect "
+    "the pad before acting."
+)
+
+
+# [C] How a failure is classified, and why a received HTTP error is not enough.
+#
+# A response error does NOT prove that the operation did not commit. A proxy, gateway or load
+# balancer in front of the daemon can answer 5xx after the daemon has already committed; the
+# daemon itself never returns 5xx from `/v1/pads` (its only 503 is on `/health`, for a
+# read-only database -- inspect `lockerd/main.py`). Only two things are treated as proof of
+# "nothing happened":
+#
+#   * a LOCAL refusal, which raises before anything is dispatched; and
+#   * an explicit 4xx refusal, a client error: every 4xx the daemon's routes raise is raised
+#     BEFORE the write on that route, so a 4xx cannot follow a commit. That reasoning assumes
+#     the response genuinely came from the daemon, and the assumption is stated in the
+#     result's `classification_basis` rather than hidden inside a status code.
+#
+# Everything else -- 5xx, 3xx, any other status, a malformed response, or a transport failure
+# after dispatch -- is UNKNOWN, because dispatch may have happened and this client cannot see
+# the daemon's storage.
+NOT_CREATED = "not_created"
+UNKNOWN = "unknown"
+
+
+def _classify_refusal(status_code: int) -> tuple[str, str]:
+    """Classify a create refusal as `not_created` or `unknown`, with the basis stated."""
+    if 400 <= status_code < 500:
+        return NOT_CREATED, (
+            "an explicit 4xx refusal: the daemon raises every create-route 4xx before the "
+            "atomic create, so a 4xx cannot follow a commit. This assumes the response came "
+            "from the daemon rather than an intermediary.")
+    return UNKNOWN, (
+        f"an HTTP {status_code} response is not proof that creation did not commit: a proxy, "
+        "gateway or load balancer can answer this after the daemon has committed.")
+
+
+def _classify_step_outcome(status_code: int) -> tuple[bool, str]:
+    """For append and seal: does this response establish that the step had no effect?"""
+    if 400 <= status_code < 500:
+        return True, "an explicit 4xx refusal, raised before the write on that route"
+    return False, (f"an HTTP {status_code} response does not establish that the step had no "
+                   "effect; an intermediary can answer this after the write committed")
+
+
+def _deposit_failure(*, cause: str, detail: str, status: str, recovery: str,
+                     acknowledged: list[str], uncertain: list[str],
+                     pad_id: str | None = None, capabilities: dict | None = None,
+                     integrity: dict | None = None, prohibition: str | None = None,
+                     basis: str | None = None) -> dict:
+    """A failed deposit. Never the ordinary successful-deposit shape.
+
+    ``error`` is preserved so callers that already branch on it keep working. The structured
+    ``partial`` block is additive and is the only place capabilities appear. They are the
+    requesting caller's own result and nobody else's: never a log line, never an exception
+    string, never a report.
+
+    ``status`` is one of ``not_created`` (nothing was created), ``partial`` (a create
+    succeeded and the sequence stopped part-way) or ``unknown`` (the create outcome could not
+    be determined).
+    """
+    partial = {
+        "status": status,
+        # The cause lives here as well as in `error`, because the preserved error object for
+        # a daemon or transport failure is the pre-existing {status, detail} shape and
+        # carries no cause field. A caller can branch on this without depending on which
+        # error shape it received.
+        "cause": cause,
+        # Same reason as `cause`: the preserved error object for a transport failure is the
+        # pre-existing shape, so the honest explanation is also carried here.
+        "detail": detail,
+        "classification_basis": basis,
+        "acknowledged": list(acknowledged),
+        "uncertain": list(uncertain),
+        "recovery": recovery,
+        "capabilities": capabilities,
+        "automatic_recovery": False,
+        "note": DEPOSIT_ACK_NOTE,
+        # A verification failure adds its own prohibition ON TOP of the standing statement
+        # rather than replacing it: both facts have to reach the caller.
+        "continuation": (DEPOSIT_CONTINUATION_NOTE if prohibition is None
+                         else f"{prohibition} {DEPOSIT_CONTINUATION_NOTE}"),
+    }
+    if uncertain:
+        partial["uncertain_note"] = DEPOSIT_UNCERTAIN_NOTE
+    if capabilities is None:
+        partial["capabilities_note"] = DEPOSIT_NO_CAPABILITIES_NOTE
+    else:
+        partial["capabilities_note"] = DEPOSIT_CAPABILITY_SENSITIVITY
+    result = {
+        "error": {
+            "status": 0,
+            "kind": "verification_failed" if integrity is not None else "deposit_failed",
+            "cause": cause,
+            "detail": detail,
+        },
+        "pad_id": pad_id,
+        "partial": partial,
+    }
+    if integrity is not None:
+        result["integrity"] = integrity
+    return result
+
+
+def _deposit_failure_from(e: LockerError, *, status: str, recovery: str,
+                          acknowledged: list[str], uncertain: list[str],
+                          pad_id: str | None, capabilities: dict | None,
+                          cause: str, detail: str, basis: str | None = None) -> dict:
+    """A deposit failure raised by the daemon or the transport, keeping the EXISTING error
+    object (`_err(e)`) exactly as it was, plus the structured partial block."""
+    result = _deposit_failure(cause=cause, detail=detail, status=status, recovery=recovery,
+                              acknowledged=acknowledged, uncertain=uncertain, pad_id=pad_id,
+                              capabilities=capabilities, basis=basis)
+    result["error"] = _err(e)["error"]
+    return result
+
+
 @server.tool(description=(
     "Create a new locker pad. Returns pad_id, write_key, and read_ticket. "
     "Save these — you MUST reuse the returned pad_id and write_key (never invent "
@@ -582,7 +745,11 @@ def locker_create(ttl_seconds: int, max_blocks: int = 32,
     "schema='locker.handoff.v1', task_id (string), from_agent (string), "
     "to_agent (string), constraints (list of strings), artifacts (list of objects), "
     "budget_usd (number or null). Subsequent appends (Block 1+) carry the task "
-    "payload."
+    "payload. Returns the daemon's acknowledgment (pad_id, seq, curr_hash) AS "
+    "ASSERTED — this call does not verify it: without the pad's current head the "
+    "client cannot recompute the chain, so the acknowledgment is the host's claim, not "
+    "an independently confirmed result. Each append is its own request and commits on "
+    "its own."
 ))
 def locker_append(pad_id: str, write_key: str, payload: Any,
                   content_type: str = "application/json") -> dict:
@@ -601,7 +768,10 @@ def locker_append(pad_id: str, write_key: str, payload: Any,
 
 @server.tool(description=(
     "Seal the pad to finalize it (pass the pad_id and write_key from locker_create). "
-    "After sealing, further appends are rejected."
+    "After sealing, further appends are rejected. The returned head_hash is the "
+    "daemon's assertion for the pad it sealed — this call does not recompute the chain, "
+    "because the client does not hold the pad's prior chain state. Use locker_deposit "
+    "when you need a head this client computed itself from the bytes it submitted."
 ))
 def locker_seal(pad_id: str, write_key: str) -> dict:
     try:
@@ -611,27 +781,32 @@ def locker_seal(pad_id: str, write_key: str) -> dict:
 
 
 @server.tool(description=(
-    "Atomically create a pad, write the envelope (Block 0), write each artifact as "
-    "a block (Block 1+), and seal — all in one call. envelope must be a "
+    "Deposit a handoff: create a pad, append the envelope as Block 0, append each "
+    "artifact as a block, then seal. This is a SEQUENCE of separate requests, NOT one "
+    "atomic operation — each request commits on its own, and a failure part-way through "
+    "can leave a pad that exists with some or all of its blocks written. When that "
+    "happens this call returns an error and does NOT return the pad's capabilities, so "
+    "the caller cannot read or continue it; do not retry blindly. envelope must be a "
     "locker.handoff.v1 envelope dict with exactly: schema='locker.handoff.v1', "
     "task_id (string), from_agent (string), to_agent (string), constraints (list of "
     "strings), artifacts (list of objects), budget_usd (number or null). artifacts "
     "is the list of payload blocks (each a string or dict) to append after the "
-    "envelope. Returns pad_id, read_ticket, head_hash, status."
+    "envelope. Returns pad_id, read_ticket, head_hash, head_source, server_head_hash, "
+    "status; head_hash is recomputed locally from the exact bytes submitted and checked "
+    "against every append acknowledgment and the seal response, so a daemon that reports "
+    "hashes for other content returns an integrity error instead of success. That check "
+    "establishes byte integrity relative to a trusted reference — it does not establish "
+    "identity, truth, safety, acceptance, or task completion."
 ))
 def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
                    payment_tx_hash: str | None = None) -> dict:
     # Encode and validate every artifact BEFORE anything is created remotely.
     #
-    # [C] This used to validate inside the append loop, i.e. after POST /v1/pads had
-    # already created a pad. A bad artifact then aborted the call with a bare
-    # ValueError while the pad existed on the daemon, and its pad_id, write_key and
-    # read_ticket were lost along with the exception -- an orphan nobody can read,
-    # write or clean up, because the capabilities to do so only ever existed in the
-    # returned dict. Checking locally first removes that failure mode entirely.
-    # The envelope is still validated by the daemon (this client does not carry the
-    # envelope rules), and the daemon's size limits are enforced remotely; those can
-    # still fail after creation -- see the note in README "Locking a handoff".
+    # [C] A bad artifact used to abort inside the append loop, i.e. after POST /v1/pads had
+    # already created a pad, and the ValueError took the pad_id, write_key and read_ticket
+    # with it. Every artifact is therefore encoded and type-checked locally first. The
+    # daemon's own checks (envelope shape, size limits) are only reachable after creation and
+    # can still fail part-way; see the `partial` block on the failure result.
     encoded: list[tuple[bytes, str]] = []
     for artifact in artifacts:
         if isinstance(artifact, (dict, list)):
@@ -641,25 +816,190 @@ def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
         else:
             raise ValueError("each artifact must be a string or dict")
 
+    # [C] Encode the envelope ONCE and hash exactly the bytes that will be sent. `expected`
+    # is the client's own chain for the INTENDED COMPLETE deposit; its last element is the
+    # reference the result carries. It is not the head of an acknowledged prefix and not the
+    # daemon's reported head, and the three are reported under distinct names so they cannot
+    # be confused.
+    envelope_bytes = json.dumps(envelope).encode()
+    outgoing = [(envelope_bytes, "application/json"), *encoded]
+    expected = _compute_chain([data for data, _ in outgoing])
+    expected_head = expected[-1]
+
+    acknowledged: list[str] = []
+    pad_id: str | None = None
+    capabilities: dict | None = None
+
+    def integrity(suffix: str, server_head: str | None) -> dict:
+        """The three heads, each named for what it is, so they cannot be conflated.
+
+        ``expected_head`` is the reference for the INTENDED COMPLETE deposit. The
+        acknowledged-prefix head is what the blocks acknowledged so far chain to -- it equals
+        the genesis value before any append, and it is deliberately a different field.
+        ``server_head_hash`` is whatever the daemon reported, or None if it reported nothing
+        usable.
+        """
+        appended = sum(1 for step in acknowledged if step.startswith("append "))
+        return {
+            "reference": "the intended complete deposit, computed by this client",
+            "expected_head": expected_head,
+            "acknowledged_prefix_head": expected[appended - 1] if appended else ZERO_HASH,
+            "acknowledged_prefix_note": (
+                "the head of the acknowledged prefix: NOT the intended complete deposit and "
+                "NOT the daemon's head"),
+            "server_head_hash": server_head,
+            "checked": "every append acknowledgment and the seal response",
+            "suffix": suffix,
+        }
+
+    # ---- step 1: create ---------------------------------------------------------------
     try:
         created = _request("POST", "/v1/pads", payment_tx_hash=payment_tx_hash, json={
             "ttl_seconds": ttl_seconds,
             "max_blocks": max(2, len(artifacts) + 1),
         })
-        pad_id = created["pad_id"]
-        write_key = created["write_key"]
-        read_ticket = created["read_ticket"]
-        _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
-                 content=json.dumps(envelope).encode(),
-                 headers={"Content-Type": "application/json"})
-        for data, ct in encoded:
-            _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
-                     content=data, headers={"Content-Type": ct})
-        sealed = _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
-        return {"pad_id": pad_id, "read_ticket": read_ticket,
-                "head_hash": sealed["head_hash"], "status": sealed["state"]}
     except LockerError as e:
-        return _err(e)
+        if e.status_code == 0:
+            # The request may have reached the daemon and committed before the response was
+            # lost. That is not "nothing happened", and it cannot be resolved from here.
+            return _deposit_failure_from(
+                e, status="unknown", recovery="capabilities_not_received", acknowledged=[],
+                uncertain=["create"], pad_id=None, capabilities=None,
+                cause="creation_outcome_unknown",
+                basis=("a transport failure after dispatch: the request may have reached the "
+                       "daemon and committed"),
+                detail=("the create request did not complete, so the pad may or may not "
+                        "exist. No capabilities were received, so it cannot be recovered "
+                        "through this API."))
+        classified, basis = _classify_refusal(e.status_code)
+        if classified == NOT_CREATED:
+            return _deposit_failure_from(
+                e, status="not_created", recovery="not_applicable", acknowledged=[],
+                uncertain=[], pad_id=None, capabilities=None, cause="creation_refused",
+                basis=basis,
+                detail="the daemon refused to create the pad; nothing was created.")
+        # A 5xx, a 3xx, an unexpected status -- none of them prove that nothing committed.
+        return _deposit_failure_from(
+            e, status="unknown", recovery="capabilities_not_received", acknowledged=[],
+            uncertain=["create"], pad_id=None, capabilities=None,
+            cause="creation_outcome_unknown", basis=basis,
+            detail=("the create request failed without establishing that nothing was "
+                    "created, so the pad may exist. No capabilities were received, so it "
+                    "cannot be recovered through this API."))
+
+    if not isinstance(created, dict) or not all(
+            k in created for k in ("pad_id", "write_key", "read_ticket")):
+        return _deposit_failure(
+            cause="creation_capabilities_unreadable", status="unknown",
+            recovery="capabilities_not_received", acknowledged=[], uncertain=["create"],
+            pad_id=created.get("pad_id") if isinstance(created, dict) else None,
+            detail=("the create response did not carry usable capabilities. The pad may "
+                    "exist and cannot be recovered through this API."))
+
+    pad_id = created["pad_id"]
+    write_key = created["write_key"]
+    read_ticket = created["read_ticket"]
+    capabilities = {"pad_id": pad_id, "write_key": write_key, "read_ticket": read_ticket}
+    acknowledged.append("create")
+
+    # ---- step 2: append every block ---------------------------------------------------
+    for index, (data, content_type) in enumerate(outgoing):
+        step = f"append {index}"
+        try:
+            ack = _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
+                           content=data, headers={"Content-Type": content_type})
+        except LockerError as e:
+            if e.status_code == 0:
+                return _deposit_failure_from(
+                    e, status="partial", recovery="capabilities_returned",
+                    acknowledged=acknowledged, uncertain=[step], pad_id=pad_id,
+                    capabilities=capabilities, cause="append_outcome_unknown",
+                    basis=("a transport failure after dispatch: the append may have "
+                           "committed"),
+                    detail=(f"the request for {step} did not complete and may already have "
+                            "committed. Do not retry it blindly."))
+            no_effect, basis = _classify_step_outcome(e.status_code)
+            return _deposit_failure_from(
+                e, status="partial", recovery="capabilities_returned",
+                acknowledged=acknowledged, uncertain=[] if no_effect else [step],
+                pad_id=pad_id, capabilities=capabilities,
+                cause="append_rejected" if no_effect else "append_outcome_unknown",
+                basis=basis,
+                detail=(f"the daemon rejected {step}." if no_effect else
+                        f"the request for {step} failed without establishing that it had no "
+                        "effect: it may already have been written. Do not retry it blindly."))
+        if ack.get("seq") != index:
+            return _deposit_failure(
+                cause="append_acknowledgment_mismatch", status="partial",
+                recovery="capabilities_returned", acknowledged=acknowledged,
+                uncertain=[f"{step} (acknowledged at sequence {ack.get('seq')!r})"],
+                pad_id=pad_id, capabilities=capabilities,
+                integrity=integrity("seq", None),
+                prohibition=DEPOSIT_VERIFICATION_PROHIBITION,
+                detail=(f"{step} was acknowledged at sequence {ack.get('seq')!r} rather "
+                        "than the submitted position."))
+        if ack.get("curr_hash") != expected[index]:
+            return _deposit_failure(
+                cause="append_acknowledgment_mismatch", status="partial",
+                recovery="capabilities_returned", acknowledged=acknowledged,
+                uncertain=[step], pad_id=pad_id, capabilities=capabilities,
+                integrity=integrity("acknowledgment", None),
+                prohibition=DEPOSIT_VERIFICATION_PROHIBITION,
+                detail=(f"{step} was acknowledged with a hash that does not match the bytes "
+                        "this client submitted."))
+        acknowledged.append(step)
+
+    # ---- step 3: seal -----------------------------------------------------------------
+    try:
+        sealed = _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
+    except LockerError as e:
+        if e.status_code == 0:
+            return _deposit_failure_from(
+                e, status="partial", recovery="capabilities_returned",
+                acknowledged=acknowledged, uncertain=["seal"], pad_id=pad_id,
+                capabilities=capabilities, cause="seal_outcome_unknown",
+                basis=("a transport failure after dispatch: the pad may already be sealed"),
+                detail=("the seal request did not complete: the pad may already be sealed. "
+                        "Do not infer that it remains open."))
+        no_effect, basis = _classify_step_outcome(e.status_code)
+        return _deposit_failure_from(
+            e, status="partial", recovery="capabilities_returned",
+            acknowledged=acknowledged, uncertain=[] if no_effect else ["seal"],
+            pad_id=pad_id, capabilities=capabilities,
+            cause="seal_rejected" if no_effect else "seal_outcome_unknown",
+            basis=basis,
+            detail=("the daemon refused to seal the pad." if no_effect else
+                    "the seal request failed without establishing that it had no effect: the "
+                    "pad may already be sealed. Do not infer that it remains open."))
+
+    server_head = sealed.get("head_hash")
+    if sealed.get("state") != "sealed":
+        return _deposit_failure(
+            cause="seal_state_unexpected", status="partial",
+            recovery="capabilities_returned", acknowledged=acknowledged, uncertain=["seal"],
+            pad_id=pad_id, capabilities=capabilities,
+            integrity=integrity("state", server_head),
+            prohibition=DEPOSIT_VERIFICATION_PROHIBITION,
+            detail=f"the pad was not sealed (state {sealed.get('state')!r}).")
+    if server_head != expected_head:
+        return _deposit_failure(
+            cause="seal_head_mismatch", status="partial",
+            recovery="capabilities_returned", acknowledged=acknowledged, uncertain=["seal"],
+            pad_id=pad_id, capabilities=capabilities,
+            integrity=integrity("head", server_head),
+            prohibition=DEPOSIT_VERIFICATION_PROHIBITION,
+            detail=("the sealed head does not match the chain computed from the submitted "
+                    "bytes."))
+    acknowledged.append("seal")
+
+    return {"pad_id": pad_id, "read_ticket": read_ticket,
+            "head_hash": expected_head,
+            # [C] head_hash is the locally recomputed reference for the intended complete
+            # deposit, not the daemon's assertion. The daemon's own value is retained beside
+            # it so agreement is visible rather than assumed.
+            "head_source": "locally_computed",
+            "server_head_hash": server_head,
+            "status": sealed["state"]}
 
 
 @server.tool(description=(
