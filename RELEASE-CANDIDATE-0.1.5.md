@@ -9,19 +9,21 @@ This file is deliberately unshipped (the source distribution carries only `READM
 
 | Item | Value |
 |---|---|
-| Build-source commit | `8441a739279f0285eca02ed6e441a4feedcfc72b` |
+| Build-source commit | `ec23d4e4f8dbddf930c8de932f5e3303aaa4916f` |
+| Tag target | the build-source commit above — this is the ONLY commit `v0.1.5` may identify |
+| Later evidence-only commits | documentation only; they must be described separately from the build source and must not be what the tag points at |
 | Subject | logging boundary stated precisely, and the release/deployment plan recorded |
 | Branch | `release/0.1.5-public`, based on the public baseline `d59efac`, no capability material in its history |
 | Exported | 73 files, 728,399 bytes (clean export of the committed tree) |
-| Source manifest | `source-manifest-8441a739279f.json`, sha256 `342491fb8052167a2daca9ee1a5fd6445a4678bb19d57afaa8c29deeee1f6b79` |
-| Provenance | `PROVENANCE-8441a739279f.json` |
+| Source manifest | `source-manifest-ec23d4e4f8db.json`, sha256 `9e0c3969b0e1749c9d2fc367914d1d0dd912219ab09f73dbc8a44cc4389eec85` (73 files, 737,511 B) |
+| Provenance | `PROVENANCE-ec23d4e4f8db.json` |
 
 ## Artifacts
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `lockermcp-0.1.5-py3-none-any.whl` | 65,812 | `916fc18ad9e1c394f6bd4d8cba6841e2748c4776734b7f20743412790de2d4a3` |
-| `lockermcp-0.1.5.tar.gz` | 155,380 | `dcf325d2cf959ed3387df7b41d536497d6775ed2add2377519952cf166a08881` |
+| `lockermcp-0.1.5-py3-none-any.whl` | 65,435 | `1ca08fe9910ab27250dd978507846d0e3b73a98bf50074826963bd1ba2720539` |
+| `lockermcp-0.1.5.tar.gz` | 156,323 | `273af07211170b324dc3daf16b796de86e9dba2645c7503b83f328739efc6ef7` |
 
 Supplementary: `MEMBER-DIGESTS-0.1.5.txt` (sha256
 `31b1dc172de1816cea581cd9b4720364e409aea20d2171cd6b3f57959c9b0996`) holds the per-member
@@ -48,9 +50,9 @@ classification fix and before this publication branch existed, is preserved at
 
 | Check | Result |
 |---|---|
-| Full test suite | **212 passed** (baseline at the reviewed commit: 184 passed + 1 nondeterministic failure) |
+| Full test suite | **216 passed** (baseline at the reviewed commit: 184 passed + 1 nondeterministic failure) |
 | MCP end-to-end | **PASSED** |
-| Installed-artifact checks, fresh venv outside the checkout | **59/59 passed** — `INSTALLED-VERIFICATION-0.1.5.txt` |
+| Installed-artifact checks, fresh venv outside the checkout | **78/78 passed** — `INSTALLED-VERIFICATION-0.1.5.txt`, including the corrected 4xx classification on the installed wheel |
 | Reproduction evidence | `repro/0.1.5/` — five scripts and their captured outputs, capability-redacted |
 
 The installed-artifact run exercises the wheel, not the checkout: provenance, version,
@@ -96,6 +98,20 @@ capabilities work against the daemon and that no failure claims a rollback or a 
   `aiosqlite` logger; the exposure and the mitigation are both pinned by a test.
 - Everything was exercised against local daemons and a local shim on temporary data. No live
   payment, no remote host, no production endpoint.
+
+## Build lineage — what supersedes what
+
+| # | Build source | State |
+|---|---|---|
+| 1 | `130da4163f99d6dfded35194fb9bc1bc8b4576f3` | **superseded, preserved** at `superseded/release-0.1.5-candidate-built-from-130da41/` with a `SUPERSEDED.txt`. Its hashes must not be uploaded. |
+| 2 | `8441a739279f0285eca02ed6e441a4feedcfc72b` | **superseded and overwritten — a process failure I am reporting.** The next build wrote into the directory that already held it, so its two artifacts are gone. Its source commit and its recorded hashes survive in git history, and it was never published, but a rebuild of that commit is **not** guaranteed to reproduce those bytes, so those recorded hashes must not be used for an upload. |
+| 3 | `ec23d4e4f8dbddf930c8de932f5e3303aaa4916f` | **the candidate of record.** These are the only artifacts proposed for upload, and the only commit `v0.1.5` may identify. |
+
+The rule this establishes: **build each candidate into a directory named for its source commit,
+and never rebuild into a directory that already holds a candidate.** Superseding means moving
+the old directory aside under a marker, not writing over it.
+
+Nothing in this lineage has been published, tagged, pushed or deployed.
 
 ## Proposed release and deployment plan
 
