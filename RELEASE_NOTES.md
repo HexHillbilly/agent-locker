@@ -30,6 +30,13 @@ hash-format, schema or stored-data change; read the compatibility note at the en
   now say plainly that their results are the daemon's assertion, because without the pad's
   prior chain state the client has nothing to recompute against.
 
+- **Classification corrected:** an HTTP failure on a *dispatched* request leaves the outcome
+  **uncertain**, whatever the status. A 4xx does not establish that the response came from the
+  daemon rather than an intermediary, nor that the upstream operation did not commit, so it is
+  not treated as a no-commit contract; `not_created` is reserved for a locally established,
+  pre-dispatch failure. Nor is it true that the daemon "cannot return 5xx" — the routes never
+  return 5xx deliberately on these paths, but an unhandled exception inside a route is turned
+  into a 500 by the framework, which can follow a commit.
 - **A failed deposit now returns the capabilities it received, in a structured block.**
   The `error` indicator is unchanged, so callers that branch on it keep working, and the
   ordinary success shape is never returned for a failure. Alongside the error, every

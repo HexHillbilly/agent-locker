@@ -523,7 +523,7 @@ for a failed operation. Alongside it, every failure now carries a structured `pa
 
 | Field | Meaning |
 |---|---|
-| `status` | `not_created` (the daemon refused; nothing exists), `partial` (a pad exists and the sequence stopped), or `unknown` (the create outcome could not be determined) |
+| `status` | `unknown` (a dispatched create failed and its outcome could not be established), `partial` (a pad exists and the sequence stopped), or `not_created` (`not_created` is **reserved** for a locally established, pre-dispatch failure; the current implementation raises for those instead of returning a result, so it does not appear in a result today) |
 | `cause` | a stable discriminator, present whichever error shape the failure produced |
 | `acknowledged` | steps the daemon answered for. **An acknowledgment is not proof of storage.** |
 | `uncertain` | steps whose outcome was not determined — they may already have committed |

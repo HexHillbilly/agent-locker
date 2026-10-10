@@ -113,6 +113,14 @@ than replacing it.
    failure, when they were successfully received.
 2. Preserve the existing error indicator; add a structured partial/recovery block; never
    return the ordinary successful-deposit shape for a failed operation.
+2a. **Corrected by a later directive:** a received 4xx is *not* sufficient evidence that the
+   response came from the daemon or that the upstream did not commit. For a dispatched
+   request, an HTTP failure therefore leaves the outcome **uncertain** at any status, and
+   `not_created` is reserved for a locally established, pre-dispatch failure. A status code
+   alone is not a no-commit contract. It is also not true that the daemon "cannot return 5xx":
+   the routes never return 5xx *deliberately* on these paths, but an **unhandled** exception
+   inside a route becomes a 500 via the framework, and that can follow a commit. Explicit route
+   responses and unhandled failures are different things, and neither proves nothing happened.
 3. Distinguish acknowledged steps from uncertain remote outcomes. An acknowledgment is not
    proof of durable storage.
 4. Include known capabilities on integrity failures for inspection, and explicitly prohibit
@@ -130,7 +138,7 @@ A failed deposit returns the pre-existing error object plus one additive block:
             "cause": "<stable discriminator>", "detail": "<what happened>"},
   "pad_id": "<pad id or null>",
   "partial": {
-    "status": "not_created | partial | unknown",
+    "status": "unknown | partial | not_created",
     "cause": "<same discriminator as error.cause where the error shape carries one>",
     "detail": "<the honest explanation, carried here because a transport failure's preserved
                error object is the older {status, detail} shape>",
@@ -171,12 +179,13 @@ From `repro/0.1.5/out_partial_deposit_postpatch.txt`:
 
 | Failure point | `status` | `capabilities` | `uncertain` |
 |---|---|---|---|
-| The daemon refuses the create (503) | `not_created` | `null` | `[]` — the daemon answered |
-| Create committed, response lost | `unknown` | `null` | `["create"]` |
-| Envelope or artifact append failed | `partial` | returned | `[]` |
-| Append forwarded, response lost | `partial` | returned | `["append N"]` |
-| Seal failed, or seal response lost | `partial` | returned | `["seal"]` |
+| Any dispatched create failure, 4xx included | `unknown` | `null` | `["create"]` |
+| Any dispatched append failure, 4xx included | `partial` | returned | `["append N"]` |
+| Any dispatched seal failure, 4xx included | `partial` | returned | `["seal"]` |
 | Integrity mismatch | `partial` | returned | the mismatching step |
+
+A sweep test asserts the property over every injected mode: no dispatched failure is ever
+classified `not_created`, and no failure ever carries a success-shaped key.
 
 ### 4.1 Residual and explicit exclusions
 
@@ -271,6 +280,19 @@ This was not one of the reported findings and is not a security defect; it is a 
 operator-visible defect in a shipped script plus a flaky gate over whether the branch is
 green. `scripts/inspect_pad.py` now normalises that one argument form. Post-fix both forms
 exit 0, and the previously flaky test passes.
+
+## 5b. Process failure, recorded rather than adopted
+
+**[S] A worktree guard was bypassed once, and it destroyed uncommitted work.** A `git checkout
+-b` refused to switch branches because the tree had uncommitted changes — the guard working as
+intended. The next command in the same batch, `git read-tree -u --reset`, then overwrote those
+changes: the classification edit, the shim modes and three tests. Nothing was lost in the final
+state, because the exact edits were re-derived and re-applied and committed immediately after.
+
+This is recorded as a **process failure, not an accepted workflow**. The rule that follows from
+it: a checkout refusal is a stop signal. Preserve the work first — in a commit, a stash or a
+separate worktree — and never answer a guard with a reset. The batch that contains a branch
+switch must not also contain an operation that rewrites the working tree.
 
 ## 6a. Capability material in reachable history — disposition
 

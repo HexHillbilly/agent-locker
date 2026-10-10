@@ -65,12 +65,14 @@ class Injecting:
       different bytes than the writer submitted and honestly acknowledges what it stored.
     * ``refuse-create`` — the create is answered with ``refuse_status`` (default 402) WITHOUT
       being forwarded: a daemon refusal that carries the no-commit contract.
-    * ``proxy-503`` — the create IS forwarded (so the daemon commits) and then answered 503,
-      which is what an intermediary failing after the fact looks like. The client must not
-      read that as "nothing was created".
+    * ``proxy-status`` — the create IS forwarded (so the daemon commits) and then answered with
+      ``refuse_status``, which is what an intermediary failing after the fact looks like, at any
+      status. The client must not read that as "nothing was created" -- 4xx included, because a
+      status code establishes neither the responder's identity nor that nothing committed.
     * ``refuse-append`` — the first append is answered with ``refuse_status``. Below 500 it is
-      answered WITHOUT being forwarded (the daemon's no-effect contract); at 500 or above it is
-      forwarded first and then answered, which is the intermediary case that proves nothing.
+      answered WITHOUT being forwarded; at 500 or above it is forwarded first and then answered.
+      Either way the client cannot tell which happened, so the step stays uncertain.
+    * ``refuse-seal`` — the same, for the seal request.
 
     ``drop_on`` controls response LOSS rather than rewriting: the named request is forwarded
     to the daemon (so it commits) and then the connection is closed with no response, which
@@ -143,6 +145,14 @@ class Injecting:
                 r = httpx.request(method, state.upstream + self.path,
                                   content=upstream_body or None, headers=headers, timeout=30)
                 state.forwarded.append(f"{hit or method} {self.path}")
+                if state.mode == "refuse-seal" and hit == "seal":
+                    payload = json.dumps({"detail": "refused"}).encode()
+                    self.send_response(state.refuse_status)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
                 if state.mode == "refuse-append" and hit == "append#1" \
                         and state.refuse_status < 500:
                     payload = json.dumps({"detail": "refused before forwarding"}).encode()
@@ -161,10 +171,10 @@ class Injecting:
                     self.end_headers()
                     self.wfile.write(payload)
                     return
-                if state.mode == "proxy-503" and hit == "create":
+                if state.mode == "proxy-status" and hit == "create":
                     # the daemon has already committed; the caller is told otherwise
                     payload = json.dumps({"detail": "upstream unavailable"}).encode()
-                    self.send_response(503)
+                    self.send_response(state.refuse_status)
                     self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(payload)))
                     self.end_headers()

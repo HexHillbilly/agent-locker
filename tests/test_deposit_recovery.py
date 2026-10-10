@@ -19,6 +19,8 @@ import logging
 import pathlib
 import re
 
+import pytest
+
 import lockermcp.server as mcp
 from conftest import ARTIFACTS, ENVELOPE, all_text, expected_chain, stored_blocks
 
@@ -47,24 +49,47 @@ def _capabilities(result: dict) -> dict | None:
 
 # ------------------------------------------------------------ 1. before creation ---
 
-def test_a_failure_before_creation_returns_no_capabilities(deposit_daemon, injecting):
-    """An explicit 4xx refusal carries the daemon's no-commit contract.
+def test_a_dispatched_create_failure_is_never_not_created(deposit_daemon, injecting):
+    """A status code is not a no-commit contract, so every dispatched create failure is unknown.
 
-    A 4xx is a client error: every 4xx the daemon's create route raises is raised BEFORE the
-    atomic create, so it cannot follow a commit.
+    The daemon's own create route raises its 4xx responses before the atomic create, so a
+    genuine daemon 4xx could not follow a commit -- but the client cannot establish that the
+    response came from the daemon rather than an intermediary, and it does not accept the
+    status code as a substitute for that provenance. `not_created` stays reserved for a
+    locally established, pre-dispatch failure, and this case is dispatched.
     """
     base, db_path = deposit_daemon
-    with injecting("refuse-create", refuse_status=402):
-        result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+    for status in (402, 409, 422, 503):
+        with injecting("refuse-create", refuse_status=status):
+            result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+        assert "error" in result
+        assert result["error"]["status"] == status, "the daemon's own status is preserved"
+        assert result["partial"]["status"] == "unknown", (
+            f"a {status} after dispatch is not proof that nothing was created")
+        assert result["partial"]["status"] != "not_created"
+        assert result["partial"]["uncertain"] == ["create"]
+        assert result["partial"]["cause"] == "creation_outcome_unknown"
+        assert _capabilities(result) is None
+        assert "establishes neither" in result["partial"]["classification_basis"]
 
-    assert "error" in result
-    assert result["error"]["status"] == 402, "the daemon's own status is preserved"
-    assert "assumes the response came from the daemon" in result["partial"]["classification_basis"]
-    assert result["partial"]["status"] == "not_created"
-    assert result["partial"]["recovery"] == "not_applicable"
-    assert _capabilities(result) is None
-    assert result["partial"]["acknowledged"] == []
-    assert result["partial"]["uncertain"] == [], "the daemon answered, so nothing is uncertain"
+
+def test_a_local_pre_dispatch_refusal_raises_and_never_reports_a_remote_outcome(deposit_daemon):
+    """`not_created` is reserved for a failure established locally, before dispatch.
+
+    The current implementation raises for those instead of returning a result, so the status is
+    unreachable from the result path -- which is the honest position: nothing about a remote
+    operation is known, and the caller is not handed a reassuring classification.
+    """
+    base, db_path = deposit_daemon
+    with pytest.raises(ValueError):
+        mcp.locker_deposit(envelope=ENVELOPE, artifacts=[123])
+    import sqlite3
+    con = sqlite3.connect(db_path)
+    try:
+        pads = con.execute("SELECT id FROM pads WHERE id != 'demo-pad-v1'").fetchall()
+    finally:
+        con.close()
+    assert pads == [], "a pre-dispatch refusal created something remotely"
     import sqlite3
     con = sqlite3.connect(db_path)
     try:
@@ -84,7 +109,7 @@ def test_a_proxy_generated_503_after_creation_does_not_claim_not_created(deposit
     """
     import sqlite3
     base, db_path = deposit_daemon
-    with injecting("proxy-503"):
+    with injecting("proxy-status", refuse_status=503):
         result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
 
     assert "error" in result
@@ -96,8 +121,7 @@ def test_a_proxy_generated_503_after_creation_does_not_claim_not_created(deposit
     assert result["partial"]["uncertain"] == ["create"]
     assert _capabilities(result) is None, "nothing was received, so nothing can be returned"
     assert result["partial"]["recovery"] == "capabilities_not_received"
-    assert "is not proof that creation did not commit" in result["partial"]["classification_basis"]
-    assert "proxy" in result["partial"]["classification_basis"]
+    assert "establishes neither" in result["partial"]["classification_basis"]
     # fixture check: the daemon really did commit behind the 503
     con = sqlite3.connect(db_path)
     try:
@@ -105,6 +129,32 @@ def test_a_proxy_generated_503_after_creation_does_not_claim_not_created(deposit
     finally:
         con.close()
     assert len(pads) == 1, "the fixture did not actually commit a create"
+
+
+def test_a_proxy_generated_4xx_after_creation_remains_unknown(deposit_daemon, injecting):
+    """The companion case: creation commits, and an intermediary answers a 4xx.
+
+    A 4xx is the status most tempting to read as a refusal, and it is not one. The result must
+    stay unknown, and the fixture proves the pad really was created.
+    """
+    import sqlite3
+    base, db_path = deposit_daemon
+    for status in (402, 409, 422):
+        with injecting("proxy-status", refuse_status=status):
+            result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+        assert result["error"]["status"] == status
+        assert result["partial"]["status"] == "unknown", (
+            f"a {status} from an intermediary is not proof that nothing was created")
+        assert result["partial"]["uncertain"] == ["create"]
+        assert _capabilities(result) is None
+        assert "establishes neither" in result["partial"]["classification_basis"]
+    # fixture check: each attempt committed a create behind the 4xx
+    con = sqlite3.connect(db_path)
+    try:
+        pads = con.execute("SELECT id FROM pads WHERE id != 'demo-pad-v1'").fetchall()
+    finally:
+        con.close()
+    assert len(pads) == 3, f"expected three committed creates, found {len(pads)}"
 
 
 def test_a_proxy_generated_5xx_on_append_is_uncertain_not_certain(deposit_daemon, injecting):
@@ -115,21 +165,39 @@ def test_a_proxy_generated_5xx_on_append_is_uncertain_not_certain(deposit_daemon
     assert result["partial"]["cause"] == "append_outcome_unknown", (
         "a 5xx answered after the append was forwarded does not prove it had no effect")
     assert result["partial"]["uncertain"] == ["append 0"]
-    assert "does not establish that the step had no effect" in result["partial"]["classification_basis"]
+    assert "establishes neither" in result["partial"]["classification_basis"]
     # fixture check: the append really did commit before the 503 was returned
     caps = _capabilities(result)
     assert len(stored_blocks(db_path, caps["pad_id"])) >= 1
 
 
-def test_a_received_daemon_error_on_append_is_not_treated_as_a_missing_step(deposit_daemon,
-                                                                           injecting):
-    """A 4xx append refusal IS the daemon's no-effect contract, so the step is not uncertain."""
+def test_a_4xx_on_append_is_uncertain_too(deposit_daemon, injecting):
+    """Append goes through the same classification path, so a 4xx leaves the step uncertain.
+
+    The daemon's append route raises its 4xx responses before the write, but the client cannot
+    establish that the 4xx came from the daemon, so it does not treat it as a no-effect
+    contract. Through the shim this append is REFUSED BEFORE forwarding, so nothing was in fact
+    written -- and the result still must not claim that.
+    """
     base, db_path = deposit_daemon
     with injecting("refuse-append", refuse_status=409):
         result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
-    assert result["partial"]["cause"] == "append_rejected"
-    assert result["partial"]["uncertain"] == [], "a 4xx cannot have written anything"
+    assert result["partial"]["cause"] == "append_outcome_unknown"
+    assert result["partial"]["uncertain"] == ["append 0"]
+    assert "establishes neither" in result["partial"]["classification_basis"]
     assert _capabilities(result) is not None
+
+
+def test_a_4xx_on_seal_is_uncertain_too(deposit_daemon, injecting):
+    """The seal step uses the same path."""
+    base, db_path = deposit_daemon
+    with injecting("refuse-seal", refuse_status=409):
+        result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+    assert result["partial"]["cause"] == "seal_outcome_unknown"
+    assert result["partial"]["uncertain"] == ["seal"]
+    assert "establishes neither" in result["partial"]["classification_basis"]
+    text = all_text(result).lower()
+    assert "do not infer that it remains open" in text
 
 
 # ------------------------------------------------- 2. creation committed, reply lost ---
@@ -146,7 +214,7 @@ def test_creation_committed_but_response_lost_is_unknown_and_unrecoverable(depos
     assert _capabilities(result) is None, "capabilities were never received, so none exist here"
     assert result["partial"]["uncertain"] == ["create"]
     assert result["partial"]["recovery"] == "capabilities_not_received"
-    assert "may or may not exist" in result["partial"]["detail"]
+    assert "it may exist" in result["partial"]["detail"]
     # fixture check: the create really did commit, so "unknown" is the honest answer
     import sqlite3
     con = sqlite3.connect(db_path)
@@ -257,6 +325,38 @@ def test_integrity_mismatch_includes_capabilities_and_prohibits_continuation(
     appended = sum(1 for s in result["partial"]["acknowledged"] if s.startswith("append "))
     assert integrity["acknowledged_prefix_head"] == chain[appended - 1]
     assert "NOT the intended complete deposit" in integrity["acknowledged_prefix_note"]
+
+
+def test_no_dispatched_failure_is_ever_classified_not_created(deposit_daemon, injecting):
+    """A sweeping guard over every injected failure mode.
+
+    `not_created` is reserved for a locally established, pre-dispatch failure. Every case here
+    dispatches something, so none of them may report it -- whatever the status, whatever the
+    step.
+    """
+    base, db_path = deposit_daemon
+    cases = ([("refuse-create", {"refuse_status": s}) for s in (400, 402, 409, 422, 500, 503)]
+             + [("proxy-status", {"refuse_status": s}) for s in (402, 422, 503)]
+             + [("refuse-append", {"refuse_status": s}) for s in (401, 409, 413, 500)]
+             + [("refuse-seal", {"refuse_status": 409})]
+             + [("drop-create", {"drop_on": "create"}), ("drop_on-append", {"drop_on": "append#1"}),
+                ("drop_on-seal", {"drop_on": "seal"})])
+    seen_statuses = set()
+    for mode, kwargs in cases:
+        if mode.startswith("drop_on-"):
+            kwargs = {"drop_on": kwargs["drop_on"]}
+            mode = "honest"
+        with injecting(mode, **kwargs):
+            result = mcp.locker_deposit(envelope=ENVELOPE, artifacts=list(ARTIFACTS))
+        assert "error" in result, f"{mode}{kwargs} did not fail"
+        partial = result["partial"]
+        seen_statuses.add(partial["status"])
+        assert partial["status"] != "not_created", (
+            f"{mode}{kwargs} reported not_created for a dispatched request")
+        assert partial["status"] in {"unknown", "partial"}
+        for key in SUCCESS_KEYS:
+            assert key not in result, f"{mode}{kwargs} returned the success field {key!r}"
+    assert seen_statuses <= {"unknown", "partial"}
 
 
 # ------------------------------------------------------- 7. existing error signal ---

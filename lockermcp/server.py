@@ -607,45 +607,37 @@ DEPOSIT_VERIFICATION_PROHIBITION = (
 )
 
 
-# [C] How a failure is classified, and why a received HTTP error is not enough.
+# [C] How a failure is classified, and why a status code is not enough.
 #
-# A response error does NOT prove that the operation did not commit. A proxy, gateway or load
-# balancer in front of the daemon can answer 5xx after the daemon has already committed; the
-# daemon itself never returns 5xx from `/v1/pads` (its only 503 is on `/health`, for a
-# read-only database -- inspect `lockerd/main.py`). Only two things are treated as proof of
-# "nothing happened":
+# For any request that was DISPATCHED, an HTTP failure leaves the outcome UNCERTAIN.
 #
-#   * a LOCAL refusal, which raises before anything is dispatched; and
-#   * an explicit 4xx refusal, a client error: every 4xx the daemon's routes raise is raised
-#     BEFORE the write on that route, so a 4xx cannot follow a commit. That reasoning assumes
-#     the response genuinely came from the daemon, and the assumption is stated in the
-#     result's `classification_basis` rather than hidden inside a status code.
+# A 4xx does not establish two separate things: that the response came from the daemon rather
+# than an intermediary, and that the upstream operation did not commit. The daemon's own routes
+# do raise their 4xx responses before the write on that route, so a genuine daemon 4xx could
+# not follow a commit -- but this client cannot establish that provenance, so it does not
+# accept the status code as a substitute for it.
 #
-# Everything else -- 5xx, 3xx, any other status, a malformed response, or a transport failure
-# after dispatch -- is UNKNOWN, because dispatch may have happened and this client cannot see
-# the daemon's storage.
-NOT_CREATED = "not_created"
+# A 5xx is no better, and it is not true that the daemon cannot produce one. The routes never
+# return 5xx *deliberately* on these paths, but an UNHANDLED exception inside a route is turned
+# into a 500 by the framework, and that can happen after the handler has already committed. So
+# an explicit route response and an unhandled failure are different things, and neither is
+# proof that nothing happened.
+#
+# `not_created` is therefore reserved for a failure established LOCALLY, before anything was
+# dispatched. Nothing reachable from here can establish that: the local pre-flight raises
+# before dispatch instead of returning a result (see locker_deposit).
+NOT_CREATED = "not_created"      # reserved: a locally established, pre-dispatch failure
 UNKNOWN = "unknown"
 
 
-def _classify_refusal(status_code: int) -> tuple[str, str]:
-    """Classify a create refusal as `not_created` or `unknown`, with the basis stated."""
-    if 400 <= status_code < 500:
-        return NOT_CREATED, (
-            "an explicit 4xx refusal: the daemon raises every create-route 4xx before the "
-            "atomic create, so a 4xx cannot follow a commit. This assumes the response came "
-            "from the daemon rather than an intermediary.")
-    return UNKNOWN, (
-        f"an HTTP {status_code} response is not proof that creation did not commit: a proxy, "
-        "gateway or load balancer can answer this after the daemon has committed.")
-
-
-def _classify_step_outcome(status_code: int) -> tuple[bool, str]:
-    """For append and seal: does this response establish that the step had no effect?"""
-    if 400 <= status_code < 500:
-        return True, "an explicit 4xx refusal, raised before the write on that route"
-    return False, (f"an HTTP {status_code} response does not establish that the step had no "
-                   "effect; an intermediary can answer this after the write committed")
+def _dispatched_failure_basis(status_code: int) -> str:
+    """Why an HTTP failure on a dispatched request leaves the outcome open."""
+    if status_code == 0:
+        return ("a transport failure after dispatch: the request may have reached the daemon "
+                "and committed")
+    return (f"an HTTP {status_code} response after dispatch: a status code establishes neither "
+            "that the response came from the daemon rather than an intermediary, nor that the "
+            "upstream operation did not commit")
 
 
 def _deposit_failure(*, cause: str, detail: str, status: str, recovery: str,
@@ -859,33 +851,17 @@ def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
             "max_blocks": max(2, len(artifacts) + 1),
         })
     except LockerError as e:
-        if e.status_code == 0:
-            # The request may have reached the daemon and committed before the response was
-            # lost. That is not "nothing happened", and it cannot be resolved from here.
-            return _deposit_failure_from(
-                e, status="unknown", recovery="capabilities_not_received", acknowledged=[],
-                uncertain=["create"], pad_id=None, capabilities=None,
-                cause="creation_outcome_unknown",
-                basis=("a transport failure after dispatch: the request may have reached the "
-                       "daemon and committed"),
-                detail=("the create request did not complete, so the pad may or may not "
-                        "exist. No capabilities were received, so it cannot be recovered "
-                        "through this API."))
-        classified, basis = _classify_refusal(e.status_code)
-        if classified == NOT_CREATED:
-            return _deposit_failure_from(
-                e, status="not_created", recovery="not_applicable", acknowledged=[],
-                uncertain=[], pad_id=None, capabilities=None, cause="creation_refused",
-                basis=basis,
-                detail="the daemon refused to create the pad; nothing was created.")
-        # A 5xx, a 3xx, an unexpected status -- none of them prove that nothing committed.
+        # The request was dispatched, so its outcome is open whatever the response said. The
+        # request may have reached the daemon and committed before the response was lost or
+        # replaced, and this client cannot see the daemon's storage.
         return _deposit_failure_from(
             e, status="unknown", recovery="capabilities_not_received", acknowledged=[],
             uncertain=["create"], pad_id=None, capabilities=None,
-            cause="creation_outcome_unknown", basis=basis,
-            detail=("the create request failed without establishing that nothing was "
-                    "created, so the pad may exist. No capabilities were received, so it "
-                    "cannot be recovered through this API."))
+            cause="creation_outcome_unknown",
+            basis=_dispatched_failure_basis(e.status_code),
+            detail=("the create request did not complete in a way that establishes whether "
+                    "the pad was created, so it may exist. No capabilities were received, so "
+                    "it cannot be recovered through this API."))
 
     if not isinstance(created, dict) or not all(
             k in created for k in ("pad_id", "write_key", "read_ticket")):
@@ -909,24 +885,12 @@ def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
             ack = _request("POST", f"/v1/pads/{pad_id}/append", token=write_key,
                            content=data, headers={"Content-Type": content_type})
         except LockerError as e:
-            if e.status_code == 0:
-                return _deposit_failure_from(
-                    e, status="partial", recovery="capabilities_returned",
-                    acknowledged=acknowledged, uncertain=[step], pad_id=pad_id,
-                    capabilities=capabilities, cause="append_outcome_unknown",
-                    basis=("a transport failure after dispatch: the append may have "
-                           "committed"),
-                    detail=(f"the request for {step} did not complete and may already have "
-                            "committed. Do not retry it blindly."))
-            no_effect, basis = _classify_step_outcome(e.status_code)
             return _deposit_failure_from(
                 e, status="partial", recovery="capabilities_returned",
-                acknowledged=acknowledged, uncertain=[] if no_effect else [step],
-                pad_id=pad_id, capabilities=capabilities,
-                cause="append_rejected" if no_effect else "append_outcome_unknown",
-                basis=basis,
-                detail=(f"the daemon rejected {step}." if no_effect else
-                        f"the request for {step} failed without establishing that it had no "
+                acknowledged=acknowledged, uncertain=[step], pad_id=pad_id,
+                capabilities=capabilities, cause="append_outcome_unknown",
+                basis=_dispatched_failure_basis(e.status_code),
+                detail=(f"the request for {step} failed without establishing that it had no "
                         "effect: it may already have been written. Do not retry it blindly."))
         if ack.get("seq") != index:
             return _deposit_failure(
@@ -953,23 +917,12 @@ def locker_deposit(envelope: dict, artifacts: list, ttl_seconds: int = 3600,
     try:
         sealed = _request("POST", f"/v1/pads/{pad_id}/seal", token=write_key)
     except LockerError as e:
-        if e.status_code == 0:
-            return _deposit_failure_from(
-                e, status="partial", recovery="capabilities_returned",
-                acknowledged=acknowledged, uncertain=["seal"], pad_id=pad_id,
-                capabilities=capabilities, cause="seal_outcome_unknown",
-                basis=("a transport failure after dispatch: the pad may already be sealed"),
-                detail=("the seal request did not complete: the pad may already be sealed. "
-                        "Do not infer that it remains open."))
-        no_effect, basis = _classify_step_outcome(e.status_code)
         return _deposit_failure_from(
             e, status="partial", recovery="capabilities_returned",
-            acknowledged=acknowledged, uncertain=[] if no_effect else ["seal"],
-            pad_id=pad_id, capabilities=capabilities,
-            cause="seal_rejected" if no_effect else "seal_outcome_unknown",
-            basis=basis,
-            detail=("the daemon refused to seal the pad." if no_effect else
-                    "the seal request failed without establishing that it had no effect: the "
+            acknowledged=acknowledged, uncertain=["seal"], pad_id=pad_id,
+            capabilities=capabilities, cause="seal_outcome_unknown",
+            basis=_dispatched_failure_basis(e.status_code),
+            detail=("the seal request failed without establishing that it had no effect: the "
                     "pad may already be sealed. Do not infer that it remains open."))
 
     server_head = sealed.get("head_hash")
